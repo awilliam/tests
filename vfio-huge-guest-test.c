@@ -393,35 +393,25 @@ struct vfio_iommu_type1_dma_unmap {
 
 #include <linux/ioctl.h>
 
-#define MAP_SIZE (1UL * 1024 * 1024 * 1024)
-#define MAP_MAX 1024
-#define DMA_CHUNK (2UL * 1024 * 1024)
+#define MMAP_GB (4UL)
+#define MMAP_SIZE (MMAP_GB * 1024 * 1024 * 1024)
+#define GUEST_GB (1024UL)
 
 void usage(char *name)
 {
-	printf("usage: %s ssss:bb:dd.f\n", name);
-	printf("\tssss: PCI segment, ex. 0000\n");
-	printf("\tbb:   PCI bus, ex. 01\n");
-	printf("\tdd:   PCI device, ex. 06\n");
-	printf("\tf:    PCI function, ex. 0\n");
+	printf("usage: %s <iommu group id>\n", name);
 }
 
 int main(int argc, char **argv)
 {
-	int seg, bus, slot, func;
 	int ret, container, group, groupid;
-	char path[50], iommu_group_path[50], *group_name;
-	struct stat st;
-	ssize_t len;
-	unsigned long i, j, vaddr;
+	char path[50];
+	unsigned long i, vaddr;
 	struct vfio_group_status group_status = {
 		.argsz = sizeof(group_status)
 	};
 	struct vfio_iommu_type1_dma_map dma_map = {
 		.argsz = sizeof(dma_map)
-	};
-	struct vfio_iommu_type1_dma_unmap dma_unmap = {
-		.argsz = sizeof(dma_unmap)
 	};
 
 	if (argc != 2) {
@@ -429,8 +419,8 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	ret = sscanf(argv[1], "%04x:%02x:%02x.%d", &seg, &bus, &slot, &func);
-	if (ret != 4) {
+	ret = sscanf(argv[1], "%d", &groupid);
+	if (ret != 1) {
 		usage(argv[0]);
 		return -1;
 	}
@@ -440,32 +430,6 @@ int main(int argc, char **argv)
 		printf("Failed to open /dev/vfio/vfio, %d (%s)\n",
 		       container, strerror(errno));
 		return container;
-	}
-
-	snprintf(path, sizeof(path),
-		 "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/",
-		 seg, bus, slot, func);
-
-	ret = stat(path, &st);
-	if (ret < 0) {
-		printf("No such device\n");
-		return  ret;
-	}
-
-	strncat(path, "iommu_group", sizeof(path) - strlen(path) - 1);
-
-	len = readlink(path, iommu_group_path, sizeof(iommu_group_path));
-	if (len <= 0) {
-		printf("No iommu_group for device\n");
-		return -1;
-	}
-
-	iommu_group_path[len] = 0;
-	group_name = basename(iommu_group_path);
-
-	if (sscanf(group_name, "%d", &groupid) != 1) {
-		printf("Unknown group\n");
-		return -1;
 	}
 
 	snprintf(path, sizeof(path), "/dev/vfio/%d", groupid);
@@ -499,7 +463,8 @@ int main(int argc, char **argv)
 		return ret;
 	}
 
-	vaddr = (unsigned long)mmap(0, MAP_SIZE, PROT_READ | PROT_WRITE,
+	/* 4G of host memory */
+	vaddr = (unsigned long)mmap(0, MMAP_SIZE, PROT_READ | PROT_WRITE,
 				    MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
 	if (!vaddr) {
 		printf("Failed to allocate memory\n");
@@ -508,112 +473,49 @@ int main(int argc, char **argv)
 
 	dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
 
-	printf("Mapping:   0%%");
+	/* 640K@0, enough for anyone */
+	printf("Mapping 0-640K");
 	fflush(stdout);
-	for (i = 0; i < MAP_MAX; i++) {
-		dma_map.size = DMA_CHUNK;
-
-		if (!(i % 3))
-			continue;
-
-		for (j = 0; j < MAP_SIZE / DMA_CHUNK; j += 4) {
-			dma_map.iova = (i * MAP_SIZE) + (j * DMA_CHUNK);
-			dma_map.vaddr = vaddr + (j * DMA_CHUNK);
-
-			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
-				       i, j, strerror(errno));
-				return ret;
-			}
-		}
-
-#if 1
-		for (j = 1; j < MAP_SIZE / DMA_CHUNK; j += 4) {
-			dma_map.iova = (i * MAP_SIZE) + (j * DMA_CHUNK);
-			dma_map.vaddr = vaddr + (j * DMA_CHUNK);
-
-			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
-				       i, j, strerror(errno));
-				return ret;
-			}
-		}
-
-		for (j = 3; j < MAP_SIZE / DMA_CHUNK; j += 4) {
-			dma_map.iova = (i * MAP_SIZE) + (j * DMA_CHUNK);
-			dma_map.vaddr = vaddr + (j * DMA_CHUNK);
-
-			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
-				       i, j, strerror(errno));
-				return ret;
-			}
-		}
-
-		for (j = 2; j < MAP_SIZE / DMA_CHUNK; j += 4) {
-			dma_map.iova = (i * MAP_SIZE) + (j * DMA_CHUNK);
-			dma_map.vaddr = vaddr + (j * DMA_CHUNK);
-
-			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
-				       i, j, strerror(errno));
-				return ret;
-			}
-		}
-#endif
-
-		if (((i + 1) * 100)/MAP_MAX != (i * 100)/MAP_MAX) {
-			printf("\b\b\b\b%3d%%", (i * 100)/MAP_MAX);
-			fflush(stdout);
-		}
+	dma_map.vaddr = vaddr;
+	dma_map.size = 640 * 1024;
+	dma_map.iova = 0;
+	ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
+	if (ret) {
+		printf("Failed to map memory (%s)\n", strerror(errno));
+		return ret;
 	}
-	printf("\b\b\b\b100%%\n");
+	printf(".\n");
 
-	printf("Unmapping:   0%%");
+	/* (3G - 1M)@1M "low memory" */
+	printf("Mapping low memory");
 	fflush(stdout);
-	for (i = 0; i < MAP_MAX; i++) {
-		dma_unmap.size = DMA_CHUNK;
-
-		if (!(i % 3))
-			continue;
-
-		for (j = 0; j < MAP_SIZE / DMA_CHUNK / 2; j += 2) {
-			dma_unmap.iova = (i * MAP_SIZE) + (j * DMA_CHUNK);
-
-			ret = ioctl(container,
-				    VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
-			if (ret) {
-				printf("Failed to unmap memory %d/%d (%s)\n",
-				       i, j, strerror(errno));
-				return ret;
-			}
-		}
-
-#if 1
-		for (j = (MAP_SIZE / DMA_CHUNK) - 1;
-		     j > MAP_SIZE / DMA_CHUNK / 2; j -= 2) {
-			dma_unmap.iova = (i * MAP_SIZE) + (j * DMA_CHUNK);
-
-			ret = ioctl(container,
-				    VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
-			if (ret) {
-				printf("Failed to unmap memory %d/%d (%s)\n",
-				       i, j, strerror(errno));
-				return ret;
-			}
-		}
-#endif
-
-		if (((i + 1) * 100)/MAP_MAX != (i * 100)/MAP_MAX) {
-			printf("\b\b\b\b%3d%%", (i * 100)/MAP_MAX);
-			fflush(stdout);
-		}
+	dma_map.size = (3UL * 1024 * 1024 * 1024) - (1024 * 1024);
+	dma_map.iova = 1024 * 1024;
+	dma_map.vaddr = vaddr + dma_map.iova;
+	ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
+	if (ret) {
+		printf("Failed to map memory (%s)\n", strerror(errno));
+		return ret;
 	}
-	printf("\b\b\b\b100%%\n");
+	printf(".\n");
+
+	/* (1TB - 4G)@4G "high memory" after the I/O hole */
+	printf("Mapping high memory");
+	fflush(stdout);
+	dma_map.size = MMAP_SIZE;
+	dma_map.iova = 4UL * 1024 * 1024 * 1024;
+	dma_map.vaddr = vaddr;
+	while (dma_map.iova < GUEST_GB * 1024 * 1024 * 1024) {
+		ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
+		if (ret) {
+			printf("Failed to map memory (%s)\n", strerror(errno));
+			return ret;
+		}
+		printf(".");
+		fflush(stdout);
+		dma_map.iova += MMAP_SIZE;
+	}
+	printf("\n");
 
 	return 0;
 }
