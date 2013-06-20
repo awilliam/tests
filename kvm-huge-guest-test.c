@@ -72,7 +72,7 @@ int main(int argc, char **argv)
 {
 	int kvmfd, vmfd, ret;
 	unsigned long vaddr, i;
-	int slot = 0, nr_slots, func;
+	int slot, nr_slots, func;
 	struct kvm_userspace_memory_region mem = {
 		.flags = 0,
 	};
@@ -130,6 +130,7 @@ int main(int argc, char **argv)
 		return ret;
 	}
 
+	slot = 0;
 
 	printf("Mapping 0-640K");
 	fflush(stdout);
@@ -149,7 +150,8 @@ int main(int argc, char **argv)
 
 	printf("Mapping low memory");
 	fflush(stdout);
-	mem.memory_size = (3UL * 1024 * 1024 * 1024) - (1024 * 1024);
+	mem.memory_size = (4UL * 1024 * 1024 * 1024) - (1024 * 1024) -
+							(512 * 1024 * 1024);
 	mem.guest_phys_addr = 1024 * 1024;
 	mem.userspace_addr = vaddr + mem.guest_phys_addr;
 	mem.slot = slot++;
@@ -168,18 +170,22 @@ int main(int argc, char **argv)
 	mem.memory_size = MMAP_SIZE;
 	mem.guest_phys_addr = 4UL * 1024 * 1024 * 1024;
 	mem.userspace_addr = vaddr;
-	while (slot < nr_slots &&
-	       mem.guest_phys_addr < GUEST_GB * 1024 * 1024 * 1024) {
-		mem.slot = slot++;
-		ret = ioctl(vmfd, KVM_SET_USER_MEMORY_REGION, &mem);
-		if (ret) {
-			printf("Failed to add memory %d (%s)\n", slot - 1,
-			       strerror(errno));
-			return ret;
+	i = slot;
+	while (mem.guest_phys_addr < GUEST_GB * 1024 * 1024 * 1024) {
+		slot = i;
+		while (slot < nr_slots &&
+		       mem.guest_phys_addr < GUEST_GB * 1024 * 1024 * 1024) {
+			mem.slot = slot++;
+			ret = ioctl(vmfd, KVM_SET_USER_MEMORY_REGION, &mem);
+			if (ret) {
+				printf("Failed to add memory %d (%s)\n",
+				       slot - 1, strerror(errno));
+				return ret;
+			}
+			printf(".");
+			fflush(stdout);
+			mem.guest_phys_addr += MMAP_SIZE;
 		}
-		printf(".");
-		fflush(stdout);
-		mem.guest_phys_addr += MMAP_SIZE;
 	}
 	printf("\n");
 	if (slot == nr_slots)
