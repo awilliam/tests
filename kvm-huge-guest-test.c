@@ -120,16 +120,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	dev.flags = KVM_DEV_ASSIGN_ENABLE_IOMMU;
-
-	printf("Assigning\n");
-	ret = ioctl(vmfd, KVM_ASSIGN_PCI_DEVICE, &dev);
-	if (ret) {
-		printf("failed to assign device %d (%s)\n", ret,
-		       strerror(errno));
-		return ret;
-	}
-
 	slot = 0;
 
 	printf("Mapping 0-640K");
@@ -147,6 +137,16 @@ int main(int argc, char **argv)
 	}
 	printf(".\n");
 	fflush(stdout);
+
+	dev.flags = KVM_DEV_ASSIGN_ENABLE_IOMMU;
+
+	printf("Assigning\n");
+	ret = ioctl(vmfd, KVM_ASSIGN_PCI_DEVICE, &dev);
+	if (ret) {
+		printf("failed to assign device %d (%s)\n", ret,
+		       strerror(errno));
+		return ret;
+	}
 
 	printf("Mapping low memory");
 	fflush(stdout);
