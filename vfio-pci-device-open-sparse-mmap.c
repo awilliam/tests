@@ -37,6 +37,12 @@
 #define VFIO_TYPE	(';')
 #define VFIO_BASE	100
 
+struct vfio_info_cap_header {
+        __u16   id;             /* Identifies capability */
+        __u16   version;        /* Version specific to the capability ID */
+        __u32   next;           /* Offset of next capability */
+};
+
 /* -------- IOCTLs for VFIO file descriptor (/dev/vfio/vfio) -------- */
 
 /**
@@ -170,12 +176,27 @@ struct vfio_region_info {
 #define VFIO_REGION_INFO_FLAG_READ	(1 << 0) /* Region supports read */
 #define VFIO_REGION_INFO_FLAG_WRITE	(1 << 1) /* Region supports write */
 #define VFIO_REGION_INFO_FLAG_MMAP	(1 << 2) /* Region supports mmap */
+#define VFIO_REGION_INFO_FLAG_CAPS      (1 << 3) /* Info supports caps */
 	__u32	index;		/* Region index */
-	__u32	resv;		/* Reserved for alignment */
+	__u32	cap_offset;	/* Reserved for alignment */
 	__u64	size;		/* Region size (bytes) */
 	__u64	offset;		/* Region offset from start of device fd */
 };
 #define VFIO_DEVICE_GET_REGION_INFO	_IO(VFIO_TYPE, VFIO_BASE + 8)
+
+#define VFIO_REGION_INFO_CAP_SPARSE_MMAP        1
+
+struct vfio_region_sparse_mmap_area {
+        __u64   offset; /* Offset of mmap'able area within region */
+        __u64   size;   /* Size of mmap'able area */
+};
+
+struct vfio_region_info_cap_sparse_mmap {
+        struct vfio_info_cap_header header;
+        __u32   nr_areas;
+        __u32   reserved;
+        struct vfio_region_sparse_mmap_area areas[];
+};
 
 /**
  * VFIO_DEVICE_GET_IRQ_INFO - _IOWR(VFIO_TYPE, VFIO_BASE + 9,
@@ -322,6 +343,44 @@ enum {
 	VFIO_PCI_NUM_IRQS
 };
 
+/**
+ * VFIO_DEVICE_GET_PCI_HOT_RESET_INFO - _IORW(VFIO_TYPE, VFIO_BASE + 12,
+ *                                            struct vfio_pci_hot_reset_info)
+ *
+ * Return: 0 on success, -errno on failure:
+ *      -enospc = insufficient buffer, -enodev = unsupported for device.
+ */
+struct vfio_pci_dependent_device {
+        __u32   group_id;
+        __u16   segment;
+        __u8    bus;
+        __u8    devfn; /* Use PCI_SLOT/PCI_FUNC */
+};
+
+struct vfio_pci_hot_reset_info {
+        __u32   argsz;
+        __u32   flags;
+        __u32   count;
+        struct vfio_pci_dependent_device        devices[];
+};
+
+#define VFIO_DEVICE_GET_PCI_HOT_RESET_INFO      _IO(VFIO_TYPE, VFIO_BASE + 12)
+
+/**
+ * VFIO_DEVICE_PCI_HOT_RESET - _IOW(VFIO_TYPE, VFIO_BASE + 13,
+ *                                  struct vfio_pci_hot_reset)
+ *
+ * Return: 0 on success, -errno on failure.
+ */
+struct vfio_pci_hot_reset {
+        __u32   argsz;
+        __u32   flags;
+        __u32   count;
+        __s32   group_fds[];
+};
+
+#define VFIO_DEVICE_PCI_HOT_RESET       _IO(VFIO_TYPE, VFIO_BASE + 13)
+
 /* -------- API for Type1 VFIO IOMMU -------- */
 
 /**
@@ -383,7 +442,9 @@ struct vfio_iommu_type1_dma_unmap {
 #include <errno.h>
 #include <libgen.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -395,28 +456,30 @@ struct vfio_iommu_type1_dma_unmap {
 
 #include <linux/ioctl.h>
 
-#define MMAP_GB (4UL)
-#define MMAP_SIZE (MMAP_GB * 1024 * 1024 * 1024)
-#define GUEST_GB (1024UL)
-
 void usage(char *name)
 {
-	printf("usage: %s <iommu group id> [hugepage path]\n", name);
+	printf("usage: %s <iommu group id> <ssss:bb:dd.f>\n", name);
 }
 
 int main(int argc, char **argv)
 {
-	int ret, container, group, groupid, fd = -1;
-	char path[PATH_MAX], mempath[PATH_MAX] = "";
-	unsigned long i, vaddr;
+	int i, ret, container, group, device, groupid;
+	char path[PATH_MAX];
+	int seg, bus, dev, func;
+
 	struct vfio_group_status group_status = {
 		.argsz = sizeof(group_status)
 	};
-	struct vfio_iommu_type1_dma_map dma_map = {
-		.argsz = sizeof(dma_map)
+
+	struct vfio_device_info device_info = {
+		.argsz = sizeof(device_info)
 	};
 
-	if (argc < 2) {
+	struct vfio_region_info region_info = {
+		.argsz = sizeof(region_info)
+	};
+
+	if (argc < 3) {
 		usage(argv[0]);
 		return -1;
 	}
@@ -427,13 +490,14 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	if (argc > 2) {
-		ret = sscanf(argv[2], "%s", mempath);
-		if (ret != 1) {
-			usage(argv[0]);
-			return -1;
-		}
+	ret = sscanf(argv[2], "%04x:%02x:%02x.%d", &seg, &bus, &dev, &func);
+	if (ret != 4) {
+		usage(argv[0]);
+		return -1;
 	}
+
+	printf("Using PCI device %04x:%02x:%02x.%d in group %d\n",
+               seg, bus, dev, func, groupid);
 
 	container = open("/dev/vfio/vfio", O_RDWR);
 	if (container < 0) {
@@ -473,90 +537,106 @@ int main(int argc, char **argv)
 		return ret;
 	}
 
-	if (strlen(mempath)) {
-		struct statfs fs;
+	snprintf(path, sizeof(path), "%04x:%02x:%02x.%d", seg, bus, dev, func);
 
-		do {
-			ret = statfs(mempath, &fs);
-		} while (ret != 0 && errno == EINTR);
-
-		if (ret) {
-			printf("Can't statfs on %s\n", mempath);
-		} else
-			printf("Using %dK huge page size\n", fs.f_bsize >> 10);
-
-		sprintf(path, "%s/%s.XXXXXX", mempath, basename(argv[0]));
-		fd = mkstemp(path);
-		if (fd < 0)
-			printf("Failed to open mempath file %s (%s)\n",
-			       path, strerror(errno));
-	}
-
-	/* 4G of host memory */
-	if (fd < 0) {
-		vaddr = (unsigned long)mmap(0, MMAP_SIZE,
-					    PROT_READ | PROT_WRITE,
-					    MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-	} else {
-		ftruncate(fd, MMAP_SIZE);
-		vaddr = (unsigned long)mmap(0, MMAP_SIZE,
-					    PROT_READ | PROT_WRITE,
-					    MAP_POPULATE | MAP_SHARED, fd, 0);
-	}
-
-	if ((void *)vaddr == MAP_FAILED) {
-		printf("Failed to allocate memory\n");
+	device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, path);
+	if (device < 0) {
+		printf("Failed to get device %s\n", path);
 		return -1;
 	}
 
-	dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
-
-	/* 640K@0, enough for anyone */
-	printf("Mapping 0-640K");
-	fflush(stdout);
-	dma_map.vaddr = vaddr;
-	dma_map.size = 640 * 1024;
-	dma_map.iova = 0;
-	ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-	if (ret) {
-		printf("Failed to map memory (%s)\n", strerror(errno));
-		return ret;
+	if (ioctl(device, VFIO_DEVICE_GET_INFO, &device_info)) {
+		printf("Failed to get device info\n");
+		return -1;
 	}
-	printf(".\n");
 
-	/* (3G - 1M)@1M "low memory" */
-	printf("Mapping low memory");
-	fflush(stdout);
-	dma_map.size = (3UL * 1024 * 1024 * 1024) - (1024 * 1024);
-	dma_map.iova = 1024 * 1024;
-	dma_map.vaddr = vaddr + dma_map.iova;
-	ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-	if (ret) {
-		printf("Failed to map memory (%s)\n", strerror(errno));
-		return ret;
-	}
-	printf(".\n");
+	printf("Device supports %d regions, %d irqs\n",
+	       device_info.num_regions, device_info.num_irqs);
 
-	/* (1TB - 4G)@4G "high memory" after the I/O hole */
-	printf("Mapping high memory");
-	fflush(stdout);
-	dma_map.size = MMAP_SIZE;
-	dma_map.iova = 4UL * 1024 * 1024 * 1024;
-	dma_map.vaddr = vaddr;
-	while (dma_map.iova < GUEST_GB * 1024 * 1024 * 1024) {
-		ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-		if (ret) {
-			printf("Failed to map memory (%s)\n", strerror(errno));
-			return ret;
+	for (i = 0; i < device_info.num_regions; i++) {
+		struct vfio_region_info *info;
+
+		info = &region_info;
+		printf("Region %d: ", i);
+		region_info.index = i;
+		if (ioctl(device, VFIO_DEVICE_GET_REGION_INFO, info)) {
+			printf("Failed to get info\n");
+			continue;
 		}
-		printf(".");
-		fflush(stdout);
-		dma_map.iova += MMAP_SIZE;
-	}
-	printf("\n");
 
-	if (fd >= 0)
-		unlink(path);
+		if (info->flags & VFIO_REGION_INFO_FLAG_CAPS) {
+			info = calloc(info->argsz, 1);
+			if (!info) {
+				printf("Failed to alloc larger info\n");
+				info = &region_info;
+			} else {
+				memcpy(info, &region_info, sizeof(region_info));
+				if (ioctl(device,
+					  VFIO_DEVICE_GET_REGION_INFO, info)) {
+					printf("Failed to re-get info\n");
+					continue;
+				}
+			}
+		}
+
+		printf("size 0x%lx, offset 0x%lx, flags 0x%x\n",
+		       (unsigned long)info->size,
+		       (unsigned long)info->offset, info->flags);
+		if (0 && info->flags & VFIO_REGION_INFO_FLAG_MMAP) {
+			void *map = mmap(NULL, (size_t)region_info.size,
+					 PROT_READ, MAP_SHARED, device,
+					 (off_t)region_info.offset);
+			if (map == MAP_FAILED) {
+				printf("mmap failed\n");
+				continue;
+			}
+
+			printf("[");
+			fwrite(map, 1, region_info.size > 16 ? 16 :
+						region_info.size, stdout);
+			printf("]\n");
+			munmap(map, (size_t)region_info.size);
+		}
+
+		if (info->flags & VFIO_REGION_INFO_FLAG_CAPS) {
+			struct vfio_info_cap_header *header;
+
+			header = (void *)info + info->cap_offset;
+
+next:
+			printf("\tCapability @%d: ID %d, version %d, next %d\n",
+			       info->cap_offset, header->id, header->version,
+			       header->next);
+
+			if (header->id == VFIO_REGION_INFO_CAP_SPARSE_MMAP) {
+				struct vfio_region_info_cap_sparse_mmap *sparse;
+				int i;
+
+				sparse = (void *)header;
+
+				printf("\t\tsparse mmap cap, nr_areas %d\n",
+				       sparse->nr_areas);
+
+				for (i = 0; i < sparse->nr_areas; i++)
+					printf("\t\t\t%d: %lx-%lx\n", i,
+					       sparse->areas[i].offset,
+					       sparse->areas[i].offset +
+					       sparse->areas[i].size);
+			}
+
+			if (header->next) {
+				header = (void *)info + header->next;
+				goto next;
+			}
+		}
+
+		if (info != &region_info)
+			free(info);
+	}
+
+	printf("Success\n");
+	//printf("Press any key to exit\n");
+	//fgetc(stdin);
 
 	return 0;
 }

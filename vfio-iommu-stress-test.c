@@ -505,6 +505,7 @@ int main(int argc, char **argv)
 		printf("Failed to allocate memory\n");
 		return -1;
 	}
+printf("%lx\n", vaddr);
 
 	dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
 

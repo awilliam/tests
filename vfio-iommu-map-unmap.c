@@ -147,8 +147,10 @@ int main(int argc, char **argv)
 					maps[i] = NULL;
 				}
 			}
-			if (count)
+			if (count) {
 				printf("\t%ld\n", count);
+				//return 0;
+			}
 			printf("|");
 			fflush(stdout);
 		}

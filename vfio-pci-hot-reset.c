@@ -322,6 +322,44 @@ enum {
 	VFIO_PCI_NUM_IRQS
 };
 
+/**
+ * VFIO_DEVICE_GET_PCI_HOT_RESET_INFO - _IORW(VFIO_TYPE, VFIO_BASE + 12,
+ *                                            struct vfio_pci_hot_reset_info)
+ *
+ * Return: 0 on success, -errno on failure:
+ *      -enospc = insufficient buffer, -enodev = unsupported for device.
+ */
+struct vfio_pci_dependent_device {
+        __u32   group_id;
+        __u16   segment;
+        __u8    bus;
+        __u8    devfn; /* Use PCI_SLOT/PCI_FUNC */
+};
+
+struct vfio_pci_hot_reset_info {
+        __u32   argsz;
+        __u32   flags;
+        __u32   count;
+        struct vfio_pci_dependent_device        devices[];
+};
+
+#define VFIO_DEVICE_GET_PCI_HOT_RESET_INFO      _IO(VFIO_TYPE, VFIO_BASE + 12)
+
+/**
+ * VFIO_DEVICE_PCI_HOT_RESET - _IOW(VFIO_TYPE, VFIO_BASE + 13,
+ *                                  struct vfio_pci_hot_reset)
+ *
+ * Return: 0 on success, -errno on failure.
+ */
+struct vfio_pci_hot_reset {
+        __u32   argsz;
+        __u32   flags;
+        __u32   count;
+        __s32   group_fds[];
+};
+
+#define VFIO_DEVICE_PCI_HOT_RESET       _IO(VFIO_TYPE, VFIO_BASE + 13)
+
 /* -------- API for Type1 VFIO IOMMU -------- */
 
 /**
@@ -383,7 +421,9 @@ struct vfio_iommu_type1_dma_unmap {
 #include <errno.h>
 #include <libgen.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -395,28 +435,29 @@ struct vfio_iommu_type1_dma_unmap {
 
 #include <linux/ioctl.h>
 
-#define MMAP_GB (4UL)
-#define MMAP_SIZE (MMAP_GB * 1024 * 1024 * 1024)
-#define GUEST_GB (1024UL)
-
 void usage(char *name)
 {
-	printf("usage: %s <iommu group id> [hugepage path]\n", name);
+	printf("usage: %s <iommu group id> <ssss:bb:dd.f>\n", name);
 }
+
+#define false 0
+#define true 1
 
 int main(int argc, char **argv)
 {
-	int ret, container, group, groupid, fd = -1;
-	char path[PATH_MAX], mempath[PATH_MAX] = "";
-	unsigned long i, vaddr;
+	int i, ret, container, group, device, groupid, *pfd;
+	char path[PATH_MAX];
+	int seg, bus, dev, func;
+
 	struct vfio_group_status group_status = {
 		.argsz = sizeof(group_status)
 	};
-	struct vfio_iommu_type1_dma_map dma_map = {
-		.argsz = sizeof(dma_map)
-	};
 
-	if (argc < 2) {
+	struct vfio_pci_hot_reset_info *reset_info;
+	struct vfio_pci_dependent_device *devices;
+	struct vfio_pci_hot_reset *reset;
+
+	if (argc < 3) {
 		usage(argv[0]);
 		return -1;
 	}
@@ -427,13 +468,14 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	if (argc > 2) {
-		ret = sscanf(argv[2], "%s", mempath);
-		if (ret != 1) {
-			usage(argv[0]);
-			return -1;
-		}
+	ret = sscanf(argv[2], "%04x:%02x:%02x.%d", &seg, &bus, &dev, &func);
+	if (ret != 4) {
+		usage(argv[0]);
+		return -1;
 	}
+
+	printf("Using PCI device %04x:%02x:%02x.%d in group %d "
+               "for hot reset test\n", seg, bus, dev, func, groupid);
 
 	container = open("/dev/vfio/vfio", O_RDWR);
 	if (container < 0) {
@@ -473,90 +515,71 @@ int main(int argc, char **argv)
 		return ret;
 	}
 
-	if (strlen(mempath)) {
-		struct statfs fs;
+	snprintf(path, sizeof(path), "%04x:%02x:%02x.%d", seg, bus, dev, func);
 
-		do {
-			ret = statfs(mempath, &fs);
-		} while (ret != 0 && errno == EINTR);
-
-		if (ret) {
-			printf("Can't statfs on %s\n", mempath);
-		} else
-			printf("Using %dK huge page size\n", fs.f_bsize >> 10);
-
-		sprintf(path, "%s/%s.XXXXXX", mempath, basename(argv[0]));
-		fd = mkstemp(path);
-		if (fd < 0)
-			printf("Failed to open mempath file %s (%s)\n",
-			       path, strerror(errno));
-	}
-
-	/* 4G of host memory */
-	if (fd < 0) {
-		vaddr = (unsigned long)mmap(0, MMAP_SIZE,
-					    PROT_READ | PROT_WRITE,
-					    MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-	} else {
-		ftruncate(fd, MMAP_SIZE);
-		vaddr = (unsigned long)mmap(0, MMAP_SIZE,
-					    PROT_READ | PROT_WRITE,
-					    MAP_POPULATE | MAP_SHARED, fd, 0);
-	}
-
-	if ((void *)vaddr == MAP_FAILED) {
-		printf("Failed to allocate memory\n");
+	device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, path);
+	if (device < 0) {
+		printf("Failed to get device %s\n", path);
 		return -1;
 	}
 
-	dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
+	reset_info = malloc(sizeof(*reset_info));
+	if (!reset_info) {
+		printf("Failed to alloc info struct\n");
+		return -ENOMEM;
+	}
 
-	/* 640K@0, enough for anyone */
-	printf("Mapping 0-640K");
-	fflush(stdout);
-	dma_map.vaddr = vaddr;
-	dma_map.size = 640 * 1024;
-	dma_map.iova = 0;
-	ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
+	reset_info->argsz = sizeof(*reset_info);
+
+	ret = ioctl(device, VFIO_DEVICE_GET_PCI_HOT_RESET_INFO, reset_info);
+	if (ret && errno == ENODEV) {
+		printf("Device does not support hot reset\n");
+		return 0;
+	}
+	if (!ret || errno != ENOSPC) {
+		printf("Expected fail/-ENOSPC, got %d/%d\n", ret, -errno);
+		return -1;
+	}
+
+	printf("Dependent device count: %d\n", reset_info->count);
+
+	reset_info = realloc(reset_info, sizeof(*reset_info) +
+			     (reset_info->count * sizeof(*devices)));
+	if (!reset_info) {
+		printf("Failed to re-alloc info struct\n");
+		return -ENOMEM;
+	}
+
+	reset_info->argsz = sizeof(*reset_info) +
+                             (reset_info->count * sizeof(*devices));
+	ret = ioctl(device, VFIO_DEVICE_GET_PCI_HOT_RESET_INFO, reset_info);
 	if (ret) {
-		printf("Failed to map memory (%s)\n", strerror(errno));
+		printf("Reset Info error\n");
 		return ret;
 	}
-	printf(".\n");
 
-	/* (3G - 1M)@1M "low memory" */
-	printf("Mapping low memory");
+	devices = &reset_info->devices[0];
+
+	for (i = 0; i < reset_info->count; i++)
+		printf("%d: %04x:%02x:%02x.%d group %d\n", i,
+		       devices[i].segment, devices[i].bus,
+		       devices[i].devfn >> 3, devices[i].devfn & 7,
+		       devices[i].group_id);
+
+	printf("Attempting reset: ");
 	fflush(stdout);
-	dma_map.size = (3UL * 1024 * 1024 * 1024) - (1024 * 1024);
-	dma_map.iova = 1024 * 1024;
-	dma_map.vaddr = vaddr + dma_map.iova;
-	ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-	if (ret) {
-		printf("Failed to map memory (%s)\n", strerror(errno));
-		return ret;
-	}
-	printf(".\n");
 
-	/* (1TB - 4G)@4G "high memory" after the I/O hole */
-	printf("Mapping high memory");
-	fflush(stdout);
-	dma_map.size = MMAP_SIZE;
-	dma_map.iova = 4UL * 1024 * 1024 * 1024;
-	dma_map.vaddr = vaddr;
-	while (dma_map.iova < GUEST_GB * 1024 * 1024 * 1024) {
-		ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
-		if (ret) {
-			printf("Failed to map memory (%s)\n", strerror(errno));
-			return ret;
-		}
-		printf(".");
-		fflush(stdout);
-		dma_map.iova += MMAP_SIZE;
-	}
-	printf("\n");
+	reset = malloc(sizeof(*reset) + sizeof(*pfd));
+	pfd = &reset->group_fds[0];
 
-	if (fd >= 0)
-		unlink(path);
+	*pfd = group;
 
-	return 0;
+	reset->argsz = sizeof(*reset) + sizeof(*pfd);
+	reset->count = 1;
+	reset->flags = 0;
+
+	ret = ioctl(device, VFIO_DEVICE_PCI_HOT_RESET, reset);
+	printf("%s\n", ret ? "Failed" : "Pass");
+
+	return ret;
 }
