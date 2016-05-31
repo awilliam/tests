@@ -122,117 +122,19 @@ int main(int argc, char **argv)
 
 	close(container);
 
-	snprintf(path, sizeof(path), "%04x:%02x:%02x.%d", seg, bus, slot, func);
+	//snprintf(path, sizeof(path), "%04x:%02x:%02x.%d", seg, bus, slot, func);
+	snprintf(path, sizeof(path), "THIS-IS-NOT-THE-RIGHT-NAME");
 
-	device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, path);
-	if (device < 0) {
-		printf("Failed to get device %s\n", path);
-		return -1;
+        for (;;) {
+		device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, path);
+		if (device >= 0) {
+			printf("Got a device named \"%s\"???\n", path);
+			break;
+		}
 	}
 
 	close(group);
+	close(device);
 
-	if (ioctl(device, VFIO_DEVICE_GET_INFO, &device_info)) {
-		printf("Failed to get device info\n");
-		return -1;
-	}
-
-	if (!(device_info.flags & VFIO_DEVICE_FLAGS_PCI)) {
-		printf("Error, not a PCI device\n");
-		return -1;
-	}
-
-	if (device_info.num_irqs < VFIO_PCI_INTX_IRQ_INDEX + 1) {
-		printf("Error, device does not support INTx\n");
-		return -1;
-	}
-
-	if (ioctl(device, VFIO_DEVICE_GET_IRQ_INFO, &irq_info)) {
-		printf("Failed to get IRQ info\n");
-		return -1;
-	}
-
-	if (irq_info.count != 1 || !(irq_info.flags & VFIO_IRQ_INFO_EVENTFD)) {
-		printf("Unexpected IRQ info properties\n");
-		return -1;
-	}
-
-	irq_set = malloc(sizeof(*irq_set) + sizeof(*pfd));
-	if (!irq_set) {
-		printf("Failed to malloc irq_set\n");
-		return -1;
-	}
-
-	irq_set->argsz = sizeof(*irq_set) + sizeof(*pfd);
-	irq_set->index = VFIO_PCI_INTX_IRQ_INDEX;
-	irq_set->start = 0;
-	pfd = (int32_t *)&irq_set->data;
-
-	intx = eventfd(0, EFD_CLOEXEC);
-	if (intx < 0) {
-		printf("Failed to get intx eventfd\n");
-		return -1;
-	}
-
-	unmask = eventfd(0, EFD_CLOEXEC);
-	if (unmask < 0) {
-		printf("Failed to get unmask eventfd\n");
-		return -1;
-	}
-
-	if (fork()) {
-
-		printf("Enable/disable thread (%d)...\n", getpid());
-
-		while (1) {
-			*pfd = intx;
-			irq_set->flags = VFIO_IRQ_SET_DATA_EVENTFD | VFIO_IRQ_SET_ACTION_TRIGGER;
-			irq_set->count = 1;
-
-			if (ioctl(device, VFIO_DEVICE_SET_IRQS, irq_set))
-				printf("INTx enable (%m)\n");
-
-			*pfd = unmask;
-			irq_set->flags = VFIO_IRQ_SET_DATA_EVENTFD | VFIO_IRQ_SET_ACTION_UNMASK;
-
-			if (ioctl(device, VFIO_DEVICE_SET_IRQS, irq_set))
-				printf("unmask irqfd (%m)\n");
-
-			//printf("+");
-			//fflush(stdout);
-
-			irq_set->flags = VFIO_IRQ_SET_DATA_NONE | VFIO_IRQ_SET_ACTION_TRIGGER;
-			irq_set->count = 0;
-
-			if (ioctl(device, VFIO_DEVICE_SET_IRQS, irq_set))
-				printf("INTx disable (%m)\n");
-
-			//printf("-");
-			//fflush(stdout);
-		}
-	} else if (fork()) {
-		uint64_t buf;
-
-		printf("Consumer thread (%d)...\n", getpid());
-
-		close(unmask);
-
-		while (read(intx, &buf, sizeof(buf)) == sizeof(buf)) {
-			//printf("!");
-			//fflush(stdout);
-		}
-	} else {
-		uint64_t buf = 1;
-
-		printf("Unmask thread (%d)...\n", getpid());
-
-		close(intx);
-
-		while (write(unmask, &buf, sizeof(buf)) == sizeof(buf)) {
-			//printf("#");
-			//fflush(stdout);
-		}
-	}
-
-	return 0;
+	return -1;
 }
