@@ -387,6 +387,7 @@ struct vfio_iommu_type1_dma_unmap {
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/param.h>
