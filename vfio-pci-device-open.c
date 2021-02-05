@@ -570,14 +570,16 @@ int main(int argc, char **argv)
 			void *map = mmap(NULL, (size_t)region_info.size,
 					 PROT_READ, MAP_SHARED, device,
 					 (off_t)region_info.offset);
+			volatile unsigned char *p = map;
+			size_t j;
 			if (map == MAP_FAILED) {
 				printf("mmap failed\n");
 				continue;
 			}
 
 			printf("[");
-			fwrite(map, 1, region_info.size > 16 ? 16 :
-						region_info.size, stdout);
+			for (j = 0; j < 16 && j < region_info.size; j++)
+				printf("%02x ", p[j]);
 			printf("]\n");
 			munmap(map, (size_t)region_info.size);
 		}

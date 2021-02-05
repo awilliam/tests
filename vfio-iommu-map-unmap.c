@@ -13,8 +13,10 @@
 #include <linux/ioctl.h>
 #include <linux/vfio.h>
 
-#define MAP_SIZE (1UL * 1024 * 1024 * 1024)
-#define MAP_CHUNK (4 * 1024)
+#define MAP_CHUNK (getpagesize())
+#define MAP_LIMIT 65535U
+#define MAP_SIZE (MAP_LIMIT * MAP_CHUNK)
+#define ITERATIONS 10
 #define REALLOC_INTERVAL 30
 
 void usage(char *name)
@@ -137,7 +139,7 @@ int main(int argc, char **argv)
 
 	memset(maps, 0, sizeof(void *) * (MAP_SIZE/dma_map.size));
 
-	for (count = 0;; count++) {
+	for (count = 0;count < ITERATIONS; count++) {
 
 		/* Every REALLOC_INTERVAL, dump our mappings to give THP something to collapse */
 		if (count % REALLOC_INTERVAL == 0) {
