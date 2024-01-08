@@ -13,8 +13,13 @@
 #include <linux/ioctl.h>
 #include <linux/vfio.h>
 
+#ifndef __PPC64__
 #define MAP_SIZE (1UL * 1024 * 1024 * 1024)
-#define MAP_CHUNK (4 * 1024)
+#define MAP_CHUNK (4UL * 1024)
+#else
+#define MAP_SIZE (1UL * 1024 * 1024*1024)
+#define MAP_CHUNK (64*1024)
+#endif
 #define REALLOC_INTERVAL 30
 
 void usage(char *name)
@@ -45,6 +50,14 @@ int main(int argc, char **argv)
 	struct vfio_iommu_type1_dma_unmap dma_unmap = {
 		.argsz = sizeof(dma_unmap)
 	};
+        struct vfio_iommu_spapr_register_memory reg = {
+                .argsz = sizeof(reg),
+                .flags = 0
+        };
+        struct vfio_iommu_spapr_tce_create tce_create = {
+                .argsz = sizeof(tce_create)
+        };
+
 
 	if (argc != 2) {
 		usage(argv[0]);
@@ -116,12 +129,34 @@ int main(int argc, char **argv)
 		return ret;
 	}
 
+#ifndef __PPC64__
 	ret = ioctl(container, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU);
 	if (ret) {
 		printf("Failed to set IOMMU\n");
 		return ret;
 	}
+#else
+	ret = ioctl(container, VFIO_SET_IOMMU, VFIO_SPAPR_TCE_v2_IOMMU);
+	if (ret) {
+		printf("Failed to set IOMMU\n");
+		return ret;
+	}
+	
+	/*create window before mapping the dma buffers*/
+	long ram_pagesize = sysconf(_SC_PAGESIZE);
+	tce_create.window_size = MAP_SIZE ;
+	tce_create.page_shift = __builtin_ctzll(ram_pagesize);
+	tce_create.levels = 1;
+        tce_create.flags = 0;
+        if(ioctl(container, VFIO_IOMMU_SPAPR_TCE_CREATE, &tce_create)){
+                printf("Create window failed %d \n",errno);
+                perror("VFIO_IOMMU_SPAPR_TCE_CREATE : ");
+        } else {
+                printf("window created successfully \n");
+        }
 
+
+#endif
 	/* Test code */
 	dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
 	dma_map.size = MAP_CHUNK;
@@ -136,6 +171,7 @@ int main(int argc, char **argv)
 	}
 
 	memset(maps, 0, sizeof(void *) * (MAP_SIZE/dma_map.size));
+
 
 	for (count = 0;; count++) {
 
@@ -160,7 +196,7 @@ int main(int argc, char **argv)
 			if (!maps[i]) {
 				maps[i] = mmap(NULL, dma_map.size,
 						PROT_READ | PROT_WRITE,
-						MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+						MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
 				if (maps[i] == MAP_FAILED) {
 					printf("Failed to mmap memory (%s)\n", strerror(errno));
 					return -1;
@@ -173,6 +209,16 @@ int main(int argc, char **argv)
 			}
 
 			dma_map.vaddr = (unsigned long)maps[i];
+#ifdef __PPC64__
+		        reg.vaddr = dma_map.vaddr;
+        		reg.size = MAP_CHUNK;
+			reg.flags = 0;
+
+        		if (ioctl(container, VFIO_IOMMU_SPAPR_REGISTER_MEMORY, &reg)) {
+                		perror("Set iommu register memory failed\n");
+                		return -1;;
+        		}
+#endif
 
 			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
 			if (ret) {
@@ -180,6 +226,7 @@ int main(int argc, char **argv)
 					strerror(errno));
 				return ret;
 			}
+			printf("dma map was successful for MAP_CHUNK %d\n",i);
 		}
 
 		printf("+");
@@ -191,6 +238,19 @@ int main(int argc, char **argv)
 			printf("Failed to unmap memory (%s)\n", strerror(errno));
 			return ret;
 		}
+		printf("dma unmap was successful for MAP_SIZE \n");
+#ifdef __PPC64__
+		for (i = dma_map.iova = 0; i < MAP_SIZE/dma_map.size; i++) {
+		        reg.vaddr = (unsigned long)maps[i];
+        		reg.size = MAP_CHUNK;
+			reg.flags = 0;
+
+        		if (ioctl(container, VFIO_IOMMU_SPAPR_UNREGISTER_MEMORY, &reg)) {
+                		perror("Set iommu unregister memory failed\n");
+                		return -1;;
+        		}
+		}
+#endif
 
 		printf("-");
 		fflush(stdout);
