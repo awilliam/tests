@@ -10,8 +10,9 @@ $gcc -o vfio-iommu-map-unmap vfio-iommu-map-unmap.c
 
 $gcc -o vfio-huge-guest-test vfio-huge-guest-test.c
 
-$ vfio-pci-device-open <iommu group id> <ssss:bb:dd.f>
+$ vfio-pci-device-open \<iommu group id\> \<ssss:bb:dd.f\>
 
 $ vfio-iommu-map-unmap ssss:bb:dd.f 
 
-$ vfio-huge-guest-test <iommu group id>
+$ vfio-huge-guest-test \<iommu group id\> 
+
