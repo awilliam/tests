@@ -643,7 +643,7 @@ int main(int argc, char **argv)
         }
 
 	/* map huge page more than 1GB page */
-/*
+
         reg64.vaddr = (long unsigned int)mmap(0, (2UL*1024*1024*1024 ), PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_1GB , 0, 0);
         printf("Mapping high memory at 0x%lx\n", tce_create.start_addr);
@@ -673,8 +673,6 @@ int main(int argc, char **argv)
 
         printf("Mapping done. Enter a key\n");
 
-        getchar();
-	*/
 #endif
 	/* (1TB - 4G)@4G "high memory" after the I/O hole */
 	printf("Mapping high memory");
