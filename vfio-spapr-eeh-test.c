@@ -104,10 +104,10 @@ int main(int argc, char **argv)
 	struct vfio_region_info region_info = {
 		.argsz = sizeof(region_info)
 	};
-	
-	struct vfio_eeh_pe_op pe_op = { 
-		.argsz = sizeof(pe_op), 
-		.flags = 0 
+
+	struct vfio_eeh_pe_op pe_op = {
+		.argsz = sizeof(pe_op),
+		.flags = 0
 	};
 
 
@@ -262,7 +262,10 @@ int main(int argc, char **argv)
 	pcidev.mmio_addr = mmap(NULL, bar_info->size, PROT_READ | PROT_WRITE,
                           MAP_SHARED, device, bar_info->offset);
 
-	write_u32(&pcidev, 0x100c, 0x1);
+	/* read MMIO */
+	for(i = 0; i < 0x10; i+=0x4 )
+		printf("MMIO register offset 0x%X value 0x%X \n",i, read_u32(&pcidev, i));
+	/*write_u32(&pcidev, 0x100c, 0x1);
     	printf("CAP  %x \n",read_u32(&pcidev, CAP));
     	printf("VS %x \n",read_u32(&pcidev, VS));
     	printf("CC %x \n",read_u32(&pcidev, CC));
@@ -273,7 +276,7 @@ int main(int argc, char **argv)
     	printf("S_DB %x \n",read_u32(&pcidev, S_DB));
     	printf("C_DB %x \n",read_u32(&pcidev, C_DB));
     	printf("S_DB_Q1 %x \n",read_u32(&pcidev,S_DB_Q1));
-    	printf("C_DB_Q1 %x \n",read_u32(&pcidev,C_DB_Q1 ));
+    	printf("C_DB_Q1 %x \n",read_u32(&pcidev,C_DB_Q1 )); */
 
 	/* Make sure EEH is supported */
 	ret = ioctl(container, VFIO_CHECK_EXTENSION, VFIO_EEH);
@@ -330,7 +333,7 @@ int main(int argc, char **argv)
   	//close(fd);
 	eeh_dev_break_debugfs(buf, len);
 	}
-	
+
 
 	pe_op.op = VFIO_EEH_PE_GET_STATE;
 	ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
@@ -372,17 +375,8 @@ int main(int argc, char **argv)
 		c = getc(stdin);
 	}
 	/* read MMIO */
-    	printf("CAP  %x \n",read_u32(&pcidev, CAP));
-    	printf("VS %x \n",read_u32(&pcidev, VS));
-    	printf("CC %x \n",read_u32(&pcidev, CC));
-    	printf("CSTS %x \n",read_u32(&pcidev, CSTS));
-    	printf("AQA %x \n",read_u32(&pcidev, AQA));
-    	printf("ASQ %x \n",read_u32(&pcidev, ASQ));
-    	printf("ACQ %x \n",read_u32(&pcidev, ACQ));
-    	printf("S_DB %x \n",read_u32(&pcidev, S_DB));
-    	printf("C_DB %x \n",read_u32(&pcidev, C_DB));
-    	printf("S_DB_Q1 %x \n",read_u32(&pcidev,S_DB_Q1));
-    	printf("C_DB_Q1 %x \n",read_u32(&pcidev,C_DB_Q1 ));
+	for(i = 0; i < 0x10; i+=0x4 )
+		printf("MMIO register offset 0x%X value 0x%X \n",i, read_u32(&pcidev, i));
 
 	pe_op.op = VFIO_EEH_PE_GET_STATE;
 	ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
