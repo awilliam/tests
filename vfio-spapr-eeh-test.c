@@ -255,6 +255,14 @@ int main(int argc, char **argv)
 		perror("");
 	}
 
+	/* Check the PE state */
+	pe_op.op = VFIO_EEH_PE_GET_STATE;
+        ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
+        if(ret < 0) {
+                perror("");
+        }
+        printf("VFIO_EEH_PE_STATE initial state of PE %x ", ret);
+
 	//pci read config
 	printf("\ndump configuration space registers\n");
     	pret = pread(device, buf, 512, pcidev.regs[VFIO_PCI_CONFIG_REGION_INDEX].offset);
@@ -264,8 +272,8 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-    		for(i=0; i<10; i++)
-        		printf("%x \n",buf[i]);
+    		for(i=0; i<10; i++)	
+			printf("%d. 0x%X \n",i,buf[i]);
 	}
 	
 	/* dump some 32bit MMIO registers */
@@ -282,6 +290,7 @@ int main(int argc, char **argv)
 	pe_op.err.func = EEH_ERR_FUNC_LD_MEM_ADDR;
 	pe_op.err.addr = 0ul;
 	pe_op.err.mask = 0ul;
+	
 	pret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
 	if(pret < 0) {
 		perror("");
@@ -289,6 +298,8 @@ int main(int argc, char **argv)
 		return pret;
 	}
 
+	printf("inject error \n");
+	fgetc(stdin);
 
 	pe_op.op = VFIO_EEH_PE_GET_STATE;
 	ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
@@ -344,6 +355,21 @@ int main(int argc, char **argv)
  	*/
 	pe_op.op = VFIO_EEH_PE_RESET_HOT;
 	ioctl(container, VFIO_EEH_PE_OP, &pe_op);
+	printf("slot VFIO_EEH_PE_RESET_HOT initiated\n");
+        pe_op.op = VFIO_EEH_PE_GET_STATE;
+        i = 5 ;
+	while (i--)
+	{
+		ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
+		if( ret < 0) {
+                	perror("");
+        	}
+		printf("\t.");
+		sleep(5);	
+	}
+	
+	printf("\nVFIO_EEH_PE_GET_STATE %d\n",ret);
+
 	pe_op.op = VFIO_EEH_PE_RESET_DEACTIVATE;
 	ioctl(container, VFIO_EEH_PE_OP, &pe_op);
 
@@ -352,12 +378,38 @@ int main(int argc, char **argv)
 	ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
 	if(!ret) {
 		printf("Success\n");
-		printf("Press any key to exit\n");
 	} else {
 		printf("VFIO_EEH_PE_CONFIGURE failed \n");
 	}
+        /* verify the PE state in operational */
+	pe_op.op = VFIO_EEH_PE_GET_STATE;
+        ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
+        if( ret < 0) {
+                perror("");
+        }
+        printf("VFIO_EEH_PE_GET_STATE %d \n",ret);
 
+	        //pci read config
+        printf("\ndump configuration space registers\n");
+        pret = pread(device, buf, 512, pcidev.regs[VFIO_PCI_CONFIG_REGION_INDEX].offset);
+        if(pret < 0)
+        {
+                perror("read onfig: ");
+        }
+        else
+        {
+                for(i=0; i<10; i++)
+                        printf("%d. 0x%X \n",i,buf[i]);
+        }
+
+	/* read MMIO */
+        for(i = 0; i < 0x10; i+=0x4 )
+                printf("MMIO register offset 0x%X value 0x%X \n",i, read_u32(&pcidev, i));
+
+
+	printf("Press any key to exit\n");
 	fgetc(stdin);
 
+	ioctl(device, VFIO_DEVICE_RESET);
 	return 0;
 }
