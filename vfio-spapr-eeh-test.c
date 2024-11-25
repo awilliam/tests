@@ -15,6 +15,10 @@
 #define VFIO_SPAPR_TCE_v2_IOMMU		7
 #define VFIO_NOIOMMU_IOMMU              8
 
+#define EEH_STATE_MIN_WAIT_TIME        (1000*1000)
+#define EEH_STATE_MAX_WAIT_TIME        (300*1000*1000)
+
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 #include <errno.h>
 #include <libgen.h>
@@ -35,6 +39,7 @@
 #include <linux/ioctl.h>
 #include <linux/vfio.h>
 #include <asm/eeh.h>
+
 
 
 void usage(char *name)
@@ -71,6 +76,9 @@ int main(int argc, char **argv)
 	ssize_t pret;
         uint32_t mask= 0b0100;
 	unsigned int buf[512];
+	int max_wait = EEH_STATE_MAX_WAIT_TIME;
+	int mwait = EEH_STATE_MIN_WAIT_TIME;
+
 
 	struct vfio_group_status group_status = {
 		.argsz = sizeof(group_status)
@@ -291,6 +299,7 @@ int main(int argc, char **argv)
 	pe_op.err.addr = 0ul;
 	pe_op.err.mask = 0ul;
 	
+	
 	pret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
 	if(pret < 0) {
 		perror("");
@@ -298,8 +307,9 @@ int main(int argc, char **argv)
 		return pret;
 	}
 
-	printf("inject error \n");
+	printf("VFIO_EEH_PE_INJECT_ERR is complete, press any key to continue\n");
 	fgetc(stdin);
+
 
 	pe_op.op = VFIO_EEH_PE_GET_STATE;
 	ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
@@ -357,17 +367,25 @@ int main(int argc, char **argv)
 	ioctl(container, VFIO_EEH_PE_OP, &pe_op);
 	printf("slot VFIO_EEH_PE_RESET_HOT initiated\n");
         pe_op.op = VFIO_EEH_PE_GET_STATE;
-        i = 5 ;
-	while (i--)
+	
+	
+	while (1)
 	{
 		ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
-		if( ret < 0) {
-                	perror("");
-        	}
-		printf("\t.");
-		sleep(5);	
+		if (ret != EEH_PE_STATE_UNAVAIL)
+		{ 
+			if(ret == EEH_PE_STATE_RESET)
+			{
+				/* if the slot in reset active state wait for minimum delay */
+				usleep(mwait);
+			}
+			break;
+		}
+		if(max_wait < 0)
+			break;
+		usleep(MIN(mwait, max_wait));
+	        max_wait -= mwait;	
 	}
-	
 	printf("\nVFIO_EEH_PE_GET_STATE %d\n",ret);
 
 	pe_op.op = VFIO_EEH_PE_RESET_DEACTIVATE;
@@ -377,7 +395,7 @@ int main(int argc, char **argv)
 	pe_op.op = VFIO_EEH_PE_CONFIGURE;
 	ret = ioctl(container, VFIO_EEH_PE_OP, &pe_op);
 	if(!ret) {
-		printf("Success\n");
+		printf("PE configure Success\n");
 	} else {
 		printf("VFIO_EEH_PE_CONFIGURE failed \n");
 	}
@@ -410,6 +428,6 @@ int main(int argc, char **argv)
 	printf("Press any key to exit\n");
 	fgetc(stdin);
 
-	ioctl(device, VFIO_DEVICE_RESET);
+//	ioctl(device, VFIO_DEVICE_RESET);
 	return 0;
 }
