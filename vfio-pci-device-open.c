@@ -13,6 +13,7 @@
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#include <stdlib.h>
 
 #define VFIO_API_VERSION	0
 
@@ -22,6 +23,8 @@
 /* Extensions */
 
 #define VFIO_TYPE1_IOMMU		1
+#define VFIO_TYPE1v2_IOMMU		3
+#define VFIO_SPAPR_TCE_v2_IOMMU		7
 #define VFIO_NOIOMMU_IOMMU              8
 
 /*
@@ -506,13 +509,15 @@ int main(int argc, char **argv)
 	}
 
         printf("pre-SET_CONTAINER:\n");
+
+#ifndef __PPC64__
         printf("VFIO_CHECK_EXTENSION VFIO_TYPE1_IOMMU: %sPresent\n",
                ioctl(container, VFIO_CHECK_EXTENSION, VFIO_TYPE1_IOMMU) ?
                "" : "Not ");
         printf("VFIO_CHECK_EXTENSION VFIO_NOIOMMU_IOMMU: %sPresent\n",
                ioctl(container, VFIO_CHECK_EXTENSION, VFIO_NOIOMMU_IOMMU) ?
                "" : "Not ");
-
+#endif
 	ret = ioctl(group, VFIO_GROUP_SET_CONTAINER, &container);
 	if (ret) {
 		printf("Failed to set group container\n");
@@ -520,7 +525,8 @@ int main(int argc, char **argv)
 	}
 
         printf("post-SET_CONTAINER:\n");
-        printf("VFIO_CHECK_EXTENSION VFIO_TYPE1_IOMMU: %sPresent\n",
+#ifndef __PPC64__
+	printf("VFIO_CHECK_EXTENSION VFIO_TYPE1_IOMMU: %sPresent\n",
                ioctl(container, VFIO_CHECK_EXTENSION, VFIO_TYPE1_IOMMU) ?
                "" : "Not ");
         printf("VFIO_CHECK_EXTENSION VFIO_NOIOMMU_IOMMU: %sPresent\n",
@@ -538,6 +544,20 @@ int main(int argc, char **argv)
 		printf("Failed to set IOMMU\n");
 		return ret;
 	}
+#else
+        printf("VFIO_CHECK_EXTENSION VFIO_SPAPR_TCE_v2_IOMMU: %s Present\n",
+		ioctl(container, VFIO_CHECK_EXTENSION, VFIO_SPAPR_TCE_v2_IOMMU) ?
+                "" : "Not ");
+
+
+        ret = ioctl(container, VFIO_SET_IOMMU, VFIO_SPAPR_TCE_v2_IOMMU);
+        if (ret) {
+                printf("Failed to set IOMMU\n");
+                return ret;
+        }
+	printf("VFIO_SET_IOMMU to VFIO_SPAPR_TCE_v2_IOMMU successfull\n");
+
+#endif
 
 	snprintf(path, sizeof(path), "%04x:%02x:%02x.%d", seg, bus, dev, func);
 

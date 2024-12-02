@@ -22,6 +22,7 @@
 /* Extensions */
 
 #define VFIO_TYPE1_IOMMU		1
+#define VFIO_SPAPR_TCE_v2_IOMMU		7
 
 /*
  * The IOCTL interface is designed for extensibility by embedding the
@@ -378,6 +379,69 @@ struct vfio_iommu_type1_dma_unmap {
 
 #define VFIO_IOMMU_UNMAP_DMA _IO(VFIO_TYPE, VFIO_BASE + 14)
 
+
+/**
+ * VFIO_IOMMU_SPAPR_REGISTER_MEMORY - _IOW(VFIO_TYPE, VFIO_BASE + 17, struct vfio_iommu_spapr_register_memory)
+ *
+ * Registers user space memory where DMA is allowed. It pins
+ * user pages and does the locked memory accounting so
+ * subsequent VFIO_IOMMU_MAP_DMA/VFIO_IOMMU_UNMAP_DMA calls
+ * get faster.
+ */
+struct vfio_iommu_spapr_register_memory {
+	__u32	argsz;
+	__u32	flags;
+	__u64	vaddr;				/* Process virtual address */
+	__u64	size;				/* Size of mapping (bytes) */
+};
+#define VFIO_IOMMU_SPAPR_REGISTER_MEMORY	_IO(VFIO_TYPE, VFIO_BASE + 17)
+
+/**
+ * VFIO_IOMMU_SPAPR_UNREGISTER_MEMORY - _IOW(VFIO_TYPE, VFIO_BASE + 18, struct vfio_iommu_spapr_register_memory)
+ *
+ * Unregisters user space memory registered with
+ * VFIO_IOMMU_SPAPR_REGISTER_MEMORY.
+ * Uses vfio_iommu_spapr_register_memory for parameters.
+ */
+#define VFIO_IOMMU_SPAPR_UNREGISTER_MEMORY	_IO(VFIO_TYPE, VFIO_BASE + 18)
+
+/**
+ * VFIO_IOMMU_SPAPR_TCE_CREATE - _IOWR(VFIO_TYPE, VFIO_BASE + 19, struct vfio_iommu_spapr_tce_create)
+ *
+ * Creates an additional TCE table and programs it (sets a new DMA window)
+ * to every IOMMU group in the container. It receives page shift, window
+ * size and number of levels in the TCE table being created.
+ *
+ * It allocates and returns an offset on a PCI bus of the new DMA window.
+ */
+struct vfio_iommu_spapr_tce_create {
+	__u32 argsz;
+	__u32 flags;
+	/* in */
+	__u32 page_shift;
+	__u32 __resv1;
+	__u64 window_size;
+	__u32 levels;
+	__u32 __resv2;
+	/* out */
+	__u64 start_addr;
+};
+#define VFIO_IOMMU_SPAPR_TCE_CREATE	_IO(VFIO_TYPE, VFIO_BASE + 19)
+
+/**
+ * VFIO_IOMMU_SPAPR_TCE_REMOVE - _IOW(VFIO_TYPE, VFIO_BASE + 20, struct vfio_iommu_spapr_tce_remove)
+ *
+ * Unprograms a TCE table from all groups in the container and destroys it.
+ * It receives a PCI bus offset as a window id.
+ */
+struct vfio_iommu_spapr_tce_remove {
+	__u32 argsz;
+	__u32 flags;
+	/* in */
+	__u64 start_addr;
+};
+#define VFIO_IOMMU_SPAPR_TCE_REMOVE	_IO(VFIO_TYPE, VFIO_BASE + 20)
+
 #endif /* _UAPIVFIO_H */
 
 #include <errno.h>
@@ -392,8 +456,12 @@ struct vfio_iommu_type1_dma_unmap {
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/vfs.h>
+#include <stdlib.h>
 
 #include <linux/ioctl.h>
+#ifdef 	__PPC64__
+#include <linux/mman.h>
+#endif
 
 #define MMAP_GB (4UL)
 #define MMAP_SIZE (MMAP_GB * 1024 * 1024 * 1024)
@@ -415,6 +483,23 @@ int main(int argc, char **argv)
 	struct vfio_iommu_type1_dma_map dma_map = {
 		.argsz = sizeof(dma_map)
 	};
+
+        struct vfio_iommu_type1_dma_map dma_map64 = {
+                .argsz = sizeof(dma_map64)
+        };
+
+        struct vfio_iommu_spapr_register_memory reg64 = {
+                .argsz = sizeof(reg64),
+                .flags = 0
+        };
+
+        struct vfio_iommu_type1_dma_unmap dma64_unmap = {
+                .argsz = sizeof(dma64_unmap)
+        };
+
+        struct vfio_iommu_spapr_tce_create tce_create = {
+                .argsz = sizeof(tce_create)
+        };
 
 	if (argc < 2) {
 		usage(argv[0]);
@@ -466,13 +551,14 @@ int main(int argc, char **argv)
 		printf("Failed to set group container\n");
 		return ret;
 	}
+	dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
 
+#ifndef __PPC64__
 	ret = ioctl(container, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU);
 	if (ret) {
 		printf("Failed to set IOMMU\n");
 		return ret;
 	}
-
 	if (strlen(mempath)) {
 		struct statfs fs;
 
@@ -509,7 +595,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	dma_map.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
 
 	/* 640K@0, enough for anyone */
 	printf("Mapping 0-640K");
@@ -528,7 +613,7 @@ int main(int argc, char **argv)
 	printf("Mapping low memory");
 	fflush(stdout);
 	dma_map.size = (3UL * 1024 * 1024 * 1024) - (1024 * 1024);
-	dma_map.iova = 1024 * 1024;
+	dma_map.iova = tce_create.start_addr ;//1024 * 1024;
 	dma_map.vaddr = vaddr + dma_map.iova;
 	ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
 	if (ret) {
@@ -537,10 +622,82 @@ int main(int argc, char **argv)
 	}
 	printf(".\n");
 
+#else
+	ret = ioctl(container, VFIO_SET_IOMMU, VFIO_SPAPR_TCE_v2_IOMMU);
+	if (ret) {
+		printf("Failed to set IOMMU\n");
+		return ret;
+	}
+	
+	/* create 64 bit second window */
+	tce_create.window_size = MMAP_SIZE; //(16UL *1024*1024*1024);//4194306; //2097152 ; // 1 page
+        tce_create.page_shift = __builtin_ctzll ((2UL*1024*1024));
+        tce_create.levels = 1;
+        tce_create.flags = 0;
+        
+	if(ioctl(container, VFIO_IOMMU_SPAPR_TCE_CREATE, &tce_create)){
+                printf("Create second window failed %d \n",errno);
+                perror("VFIO_IOMMU_SPAPR_TCE_CREATE : ");
+        } else {
+                printf("second window created successfully \n");
+        }
+
+	/* map huge page more than 1GB page */
+
+        reg64.vaddr = (long unsigned int)mmap(0, (2UL*1024*1024*1024 ), PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_1GB , 0, 0);
+        printf("Mapping high memory at 0x%lx\n", tce_create.start_addr);
+        fflush(stdout);
+
+        reg64.size = 2UL*1024*1024*1024;//MMAP_SIZE;
+        reg64.flags = 0;
+        if (ioctl(container, VFIO_IOMMU_SPAPR_REGISTER_MEMORY, &reg64)) {
+                perror("Set iommu register memory failed\n");
+                exit(-1);
+        }
+        printf("Register success\n");
+        getchar();
+        
+        dma_map64.vaddr = reg64.vaddr;
+	dma_map64.size = reg64.size;
+        //dma_map64.size = 2UL*1024*1024*1024;
+        dma_map64.flags = VFIO_DMA_MAP_FLAG_READ | VFIO_DMA_MAP_FLAG_WRITE;
+        dma_map64.iova = tce_create.start_addr;
+
+        ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map64);
+        if (ret) {
+                printf("Failed to map memory (%s)\n", strerror(errno));
+                getchar();
+                exit(-1);
+        }
+
+        printf("Mapping done. Enter a key\n");
+
+#endif
 	/* (1TB - 4G)@4G "high memory" after the I/O hole */
 	printf("Mapping high memory");
 	fflush(stdout);
+#ifdef	__PPC64__
+	/* map huge page more than 1GB page */
+
+        vaddr = (long unsigned int)mmap(0, MMAP_SIZE, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_HUGE_1GB , 0, 0);
+        printf("Mapping high memory at 0x%lx\n", tce_create.start_addr);
+        fflush(stdout);
+
+	reg64.vaddr = vaddr;
+        reg64.size = MMAP_SIZE;
+        reg64.flags = 0;
+        if (ioctl(container, VFIO_IOMMU_SPAPR_REGISTER_MEMORY, &reg64)) {
+                perror("Set iommu register memory failed\n");
+                exit(-1);
+        }
+        printf("Register success\n");
+        getchar();
+#endif
+
 	dma_map.size = MMAP_SIZE;
+#ifndef __PPC64__
 	dma_map.iova = 4UL * 1024 * 1024 * 1024;
 	dma_map.vaddr = vaddr;
 	while (dma_map.iova < GUEST_GB * 1024 * 1024 * 1024) {
@@ -553,6 +710,21 @@ int main(int argc, char **argv)
 		fflush(stdout);
 		dma_map.iova += MMAP_SIZE;
 	}
+#else
+	dma_map.iova = tce_create.start_addr;
+        dma_map.vaddr = vaddr;
+
+        ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
+        if (ret) {
+                printf("Failed to map memory (%s)\n", strerror(errno));
+                getchar();
+                exit(-1);
+        }
+
+        printf("Mapping done. Enter a key\n");
+
+        getchar();
+#endif	
 	printf("\n");
 
 	if (fd >= 0)
