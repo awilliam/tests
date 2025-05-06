@@ -1,18 +1,26 @@
-CFLAGS := -g -Wall
+CFLAGS = -g -Wall
+SHARED_SRCS = utils.c
+HEADERS = utils.h
+TEST_SRCS = vfio-pci-device-dma-map.c vfio-pci-huge-fault-race.c
 
-TESTS := vfio-pci-device-dma-map vfio-pci-huge-fault-race
+SHARED_OBJS = $(SHARED_SRCS:.c=.o)
+TEST_BINS = $(TEST_SRCS:.c=)
+ARCHIVE_NAME = vfio-tests
 
-.DEFAULT_GOAL := all
+.PHONY: all clean archive
 
-vfio-pci-device-dma-map: vfio-pci-device-dma-map.o utils.o
-	$(CC) -o $@ $^
+all: $(TEST_BINS)
 
-vfio-pci-huge-fault-race: vfio-pci-huge-fault-race.o utils.o
-	$(CC) -o $@ $^
+$(TEST_BINS): %: %.o $(SHARED_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
 
-.PHONY: all
-all: $(TESTS)
+%.o: %.c $(HEADERS) Makefile
+	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: clean
 clean:
-	rm -f $(TESTS) *.o
+	rm -f $(SHARED_OBJS) $(TEST_SRCS:.c=.o) $(TEST_BINS) *.o $(ARCHIVE_NAME).tar.gz
+
+archive:
+	tar -czvf $(ARCHIVE_NAME).tar.gz Makefile $(SHARED_SRCS) $(TEST_SRCS) $(HEADERS)
+
+.PRECIOUS: $(TEST_BINS)
