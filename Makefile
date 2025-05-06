@@ -7,7 +7,7 @@ SHARED_OBJS = $(SHARED_SRCS:.c=.o)
 TEST_BINS = $(TEST_SRCS:.c=)
 ARCHIVE_BASE_NAME = vfio-tests
 GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null)
-GIT_DIRTY := $(shell git diff --quiet || echo "-dirty" 2>/dev/null)
+GIT_DIRTY := $(shell git diff --quiet 2>/dev/null || echo "-dirty")
 ifeq ($(GIT_SHA),)
   GIT_VERSION = nogit
 else
