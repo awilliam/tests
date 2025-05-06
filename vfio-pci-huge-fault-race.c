@@ -61,8 +61,6 @@ static void do_race(int device, struct vfio_region_info *region, size_t pagesz)
 			return;
 		}
 
-		madvise(map, pagesz, MADV_HUGEPAGE);
-
 		go = 0;
 		pthread_create(&thread1, NULL, thread_func, map + pagesz - getpagesize());
 		pthread_create(&thread2, NULL, thread_func, map);
