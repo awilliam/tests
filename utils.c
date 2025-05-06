@@ -215,5 +215,5 @@ void *mmap_align(void *addr, size_t length, int prot, int flags,
 	munmap(addr_base, addr_align - addr_base);
 	munmap(addr_align + length, align - (addr_align - addr_base));
 
-	return mmap(addr_align, length, prot, flags, fd, offset);
+	return mmap(addr_align, length, prot, flags | MAP_FIXED, fd, offset);
 }
