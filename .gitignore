@@ -1,0 +1,4 @@
+*.o
+vfio-pci-device-dma-map
+vfio-pci-huge-fault-race
+.vscode

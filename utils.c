@@ -204,6 +204,7 @@ void *mmap_align(void *addr, size_t length, int prot, int flags,
 {
 	void *addr_align;
 	void *addr_base;
+	void *map;
 
 	addr_base = mmap(NULL, length + align, PROT_NONE,
 			 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -215,5 +216,8 @@ void *mmap_align(void *addr, size_t length, int prot, int flags,
 	munmap(addr_base, addr_align - addr_base);
 	munmap(addr_align + length, align - (addr_align - addr_base));
 
-	return mmap(addr_align, length, prot, flags, fd, offset);
+	map = mmap(addr_align, length, prot, flags | MAP_FIXED, fd, offset);
+	if (map != MAP_FAILED)
+		madvise(map, length, MADV_HUGEPAGE);
+	return map;
 }
