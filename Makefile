@@ -1,7 +1,7 @@
 CFLAGS = -g -Wall
 SHARED_SRCS = utils.c
 HEADERS = utils.h
-TEST_SRCS = vfio-pci-device-dma-map.c vfio-pci-huge-fault-race.c
+TEST_SRCS = vfio-pci-device-dma-map.c vfio-pci-huge-fault-race.c vfio-pci-mem-dma-map.c
 
 SHARED_OBJS = $(SHARED_SRCS:.c=.o)
 TEST_BINS = $(TEST_SRCS:.c=)
