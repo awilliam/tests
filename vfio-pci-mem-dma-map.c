@@ -38,14 +38,13 @@ void usage(char *name)
 
 int main(int argc, char **argv)
 {
-	int container, device, ret, huge_fd = -1, pgsize = getpagesize(), i;
+	int container, device, ret, huge_fd = -1, i;
 	int prot = PROT_READ | PROT_WRITE;
-	int flags = MAP_SHARED | MAP_ANONYMOUS;
+	int flags = MAP_ANONYMOUS;
 	char mempath[PATH_MAX] = "";
-	unsigned long size_gb, j, map_total, unmap_total, start, elapsed;
+	unsigned long size_gb, map_total, unmap_total, start, elapsed;
 	float secs;
 	void *map;
-	volatile char *ptr;
 	struct vfio_iommu_type1_dma_map dma_map = {
 		.argsz = sizeof(dma_map),
 		.iova = HIGH_MEM,
@@ -90,8 +89,6 @@ int main(int argc, char **argv)
 		printf("Using %ldMB huge page size on %s\n",
 		       fs.f_bsize >> 20, mempath);
 
-		pgsize = fs.f_bsize;
-
 		sprintf(mempath + strlen(mempath), "/%s.XXXXXX", basename(argv[0]));
 		huge_fd = mkstemp(mempath);
 		if (huge_fd < 0) {
@@ -113,7 +110,8 @@ int main(int argc, char **argv)
 
 	for (i = 0; i < LOOP; i++) {
 		start = now_nsec();
-		map = mmap(0, size_gb << 30, prot, flags, huge_fd, 0);
+		map = mmap(0, size_gb << 30, prot,
+			   flags | (huge_fd == -1 ? MAP_PRIVATE : MAP_SHARED), huge_fd, 0);
 		if (map == MAP_FAILED) {
 			printf("Failed to allocate memory: %s\n", strerror(errno));
 			if (huge_fd >= 0)
@@ -130,8 +128,7 @@ int main(int argc, char **argv)
 			madvise(map, size_gb << 30, MADV_HUGEPAGE);
 	
 		start = now_nsec();
-		for (j = 0, ptr = map; j < size_gb << 30; j += pgsize)
-			(void)ptr[j];
+		memset(map, 0, size_gb << 30);
 		elapsed = now_nsec() - start;
 		secs = (float)elapsed / NSEC_PER_SEC;
 		fprintf(stderr, "%d: mmap populated in %.3fs\n", i, secs);
@@ -183,7 +180,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	flags |= MAP_POPULATE;
+	flags |= MAP_POPULATE | MAP_SHARED;
 	map_total = unmap_total = 0;
 
 	for (i = 0; i < LOOP; i++) {
