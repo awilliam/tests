@@ -618,7 +618,7 @@ next:
 				       sparse->nr_areas);
 
 				for (i = 0; i < sparse->nr_areas; i++)
-					printf("\t\t\t%d: %lx-%lx\n", i,
+					printf("\t\t\t%d: %llx-%llx\n", i,
 					       sparse->areas[i].offset,
 					       sparse->areas[i].offset +
 					       sparse->areas[i].size);

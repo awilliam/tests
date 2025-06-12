@@ -523,7 +523,7 @@ printf("%lx\n", vaddr);
 
 			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
 			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
+				printf("Failed to map memory %ld/%ld (%s)\n",
 				       i, j, strerror(errno));
 				return ret;
 			}
@@ -536,7 +536,7 @@ printf("%lx\n", vaddr);
 
 			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
 			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
+				printf("Failed to map memory %ld/%ld (%s)\n",
 				       i, j, strerror(errno));
 				return ret;
 			}
@@ -548,7 +548,7 @@ printf("%lx\n", vaddr);
 
 			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
 			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
+				printf("Failed to map memory %ld/%ld (%s)\n",
 				       i, j, strerror(errno));
 				return ret;
 			}
@@ -560,7 +560,7 @@ printf("%lx\n", vaddr);
 
 			ret = ioctl(container, VFIO_IOMMU_MAP_DMA, &dma_map);
 			if (ret) {
-				printf("Failed to map memory %d/%d (%s)\n",
+				printf("Failed to map memory %ld/%ld (%s)\n",
 				       i, j, strerror(errno));
 				return ret;
 			}
@@ -568,7 +568,7 @@ printf("%lx\n", vaddr);
 #endif
 
 		if (((i + 1) * 100)/MAP_MAX != (i * 100)/MAP_MAX) {
-			printf("\b\b\b\b%3d%%", (i * 100)/MAP_MAX);
+			printf("\b\b\b\b%3ld%%", (i * 100)/MAP_MAX);
 			fflush(stdout);
 		}
 	}
@@ -588,7 +588,7 @@ printf("%lx\n", vaddr);
 			ret = ioctl(container,
 				    VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 			if (ret) {
-				printf("Failed to unmap memory %d/%d (%s)\n",
+				printf("Failed to unmap memory %ld/%ld (%s)\n",
 				       i, j, strerror(errno));
 				return ret;
 			}
@@ -602,7 +602,7 @@ printf("%lx\n", vaddr);
 			ret = ioctl(container,
 				    VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 			if (ret) {
-				printf("Failed to unmap memory %d/%d (%s)\n",
+				printf("Failed to unmap memory %ld/%ld (%s)\n",
 				       i, j, strerror(errno));
 				return ret;
 			}
@@ -610,7 +610,7 @@ printf("%lx\n", vaddr);
 #endif
 
 		if (((i + 1) * 100)/MAP_MAX != (i * 100)/MAP_MAX) {
-			printf("\b\b\b\b%3d%%", (i * 100)/MAP_MAX);
+			printf("\b\b\b\b%3ld%%", (i * 100)/MAP_MAX);
 			fflush(stdout);
 		}
 	}

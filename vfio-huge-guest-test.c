@@ -483,7 +483,7 @@ int main(int argc, char **argv)
 		if (ret) {
 			printf("Can't statfs on %s\n", mempath);
 		} else
-			printf("Using %dK huge page size\n", fs.f_bsize >> 10);
+			printf("Using %ldK huge page size\n", fs.f_bsize >> 10);
 
 		sprintf(path, "%s/%s.XXXXXX", mempath, basename(argv[0]));
 		fd = mkstemp(path);

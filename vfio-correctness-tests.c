@@ -424,7 +424,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_map.iova += pagesize, dma_map.vaddr += pagesize) {
 		ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 		if (ret) {
-			printf("Failed to map @0x%lx(%s)\n",
+			printf("Failed to map @0x%llx(%s)\n",
 			       dma_map.iova, strerror(errno));
 			return ret;
 		}
@@ -436,7 +436,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_map.iova += pagesize, dma_map.vaddr += pagesize) {
 		ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 		if (!ret) {
-			printf("Error, allowed to remap @0x%lx(%s)\n",
+			printf("Error, allowed to remap @0x%llx(%s)\n",
 			       dma_map.iova, strerror(errno));
 			return ret;
 		}
@@ -448,7 +448,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_unmap.iova += pagesize) {
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret || dma_unmap.size != pagesize) {
-			printf("Failed to unmap @0x%lx(%s)\n",
+			printf("Failed to unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -461,7 +461,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 		dma_unmap.size = pagesize;
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret || dma_unmap.size) {
-			printf("Error, allowed to re-unmap @0x%lx(%s)\n",
+			printf("Error, allowed to re-unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -475,7 +475,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_map.iova -= pagesize, dma_map.vaddr -= pagesize) {
 		ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 		if (ret) {
-			printf("Failed to backwards map @0x%lx(%s)\n",
+			printf("Failed to backwards map @0x%llx(%s)\n",
 			       dma_map.iova, strerror(errno));
 			return ret;
 		}
@@ -487,7 +487,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_unmap.iova -= pagesize) {
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret || dma_unmap.size != pagesize) {
-			printf("Failed to backwards unmap @0x%lx(%s)\n",
+			printf("Failed to backwards unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -499,7 +499,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_map.iova += (pagesize * 2), dma_map.vaddr += (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 		if (ret) {
-			printf("Failed even checker map @0x%lx(%s)\n",
+			printf("Failed even checker map @0x%llx(%s)\n",
 			       dma_map.iova, strerror(errno));
 			return ret;
 		}
@@ -509,7 +509,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_map.iova += (pagesize * 2), dma_map.vaddr += (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 		if (ret) {
-			printf("Failed odd checker map @0x%lx(%s)\n",
+			printf("Failed odd checker map @0x%llx(%s)\n",
 			       dma_map.iova, strerror(errno));
 			return ret;
 		}
@@ -521,7 +521,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_unmap.iova += (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret || dma_unmap.size != pagesize) {
-			printf("Failed even checker unmap @0x%lx(%s)\n",
+			printf("Failed even checker unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -531,7 +531,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_unmap.iova += (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret || dma_unmap.size != pagesize) {
-			printf("Failed odd checker unmap @0x%lx(%s)\n",
+			printf("Failed odd checker unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -544,7 +544,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_map.iova -= (pagesize * 2), dma_map.vaddr -= (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 		if (ret) {
-			printf("Failed even backward checker map @0x%lx(%s)\n",
+			printf("Failed even backward checker map @0x%llx(%s)\n",
 			       dma_map.iova, strerror(errno));
 			return ret;
 		}
@@ -555,7 +555,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_map.iova -= (pagesize * 2), dma_map.vaddr -= (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 		if (ret) {
-			printf("Failed odd backward checker map @0x%lx(%s)\n",
+			printf("Failed odd backward checker map @0x%llx(%s)\n",
 			       dma_map.iova, strerror(errno));
 			return ret;
 		}
@@ -567,7 +567,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_unmap.iova -= (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret || dma_unmap.size != pagesize) {
-			printf("Failed even backward checker unmap @0x%lx(%s)\n",
+			printf("Failed even backward checker unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -577,7 +577,7 @@ int pagesize_test(int fd, unsigned long vaddr,
 	     dma_unmap.iova -= (pagesize * 2)) {
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret || dma_unmap.size != pagesize) {
-			printf("Failed odd backward checker unmap @0x%lx(%s)\n",
+			printf("Failed odd backward checker unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -608,7 +608,7 @@ int hugepage_test(int fd, unsigned long vaddr,
 	dma_map.size = size;
 	ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 	if (ret) {
-		printf("Failed to map @0x%lx(%s)\n",
+		printf("Failed to map @0x%llx(%s)\n",
 		       dma_map.iova, strerror(errno));
 		if (errno == EBUSY)
 			printf("If this is an AMD system, this may be a known bug\n");
@@ -621,7 +621,7 @@ int hugepage_test(int fd, unsigned long vaddr,
 	dma_map.size = size;
 	ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 	if (!ret) {
-		printf("Error, allowed to remap @0x%lx(%s)\n",
+		printf("Error, allowed to remap @0x%llx(%s)\n",
 		       dma_map.iova, strerror(errno));
 		return ret;
 	}
@@ -631,7 +631,7 @@ int hugepage_test(int fd, unsigned long vaddr,
 	dma_unmap.size = size;
 	ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 	if (ret || dma_unmap.size != size) {
-		printf("Failed to unmap @0x%lx(%s)\n",
+		printf("Failed to unmap @0x%llx(%s)\n",
 		       dma_unmap.iova, strerror(errno));
 		return ret;
 	}
@@ -642,7 +642,7 @@ int hugepage_test(int fd, unsigned long vaddr,
 	dma_map.size = size;
 	ret = ioctl(fd, VFIO_IOMMU_MAP_DMA, &dma_map);
 	if (ret) {
-		printf("Failed to map @0x%lx(%s)\n",
+		printf("Failed to map @0x%llx(%s)\n",
 		       dma_map.iova, strerror(errno));
 		return ret;
 	}
@@ -655,7 +655,7 @@ int hugepage_test(int fd, unsigned long vaddr,
 		dma_unmap.size = pagesize;
 		ret = ioctl(fd, VFIO_IOMMU_UNMAP_DMA, &dma_unmap);
 		if (ret) {
-			printf("Failed to unmap @0x%lx(%s)\n",
+			printf("Failed to unmap @0x%llx(%s)\n",
 			       dma_unmap.iova, strerror(errno));
 			return ret;
 		}
@@ -673,7 +673,7 @@ int hugepage_test(int fd, unsigned long vaddr,
 
 	printf("hugepage test: PASSED\n");
 	if (unmaps > 1)
-		printf("(unmaps 0x%lx, biggest page 0x%lx)\n",
+		printf("(unmaps 0x%x, biggest page 0x%lx)\n",
 		       unmaps, biggest_page);
 	return 0;
 }
@@ -766,7 +766,7 @@ int main(int argc, char **argv)
 		} else
 			hugepagesize = fs.f_bsize;
 
-		printf("Using %dK page size, %dK huge page size\n",
+		printf("Using %ldK page size, %ldK huge page size\n",
 		       pagesize >> 10, hugepagesize >> 10);
 
 		sprintf(path, "%s/%s.XXXXXX", mempath, basename(argv[0]));
