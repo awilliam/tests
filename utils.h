@@ -10,6 +10,8 @@
 #ifndef VFIO_TESTSUITE_UTILS_H
 #define VFIO_TESTSUITE_UTILS_H
 
+#include <time.h>
+
 /*
  * Logging
  */

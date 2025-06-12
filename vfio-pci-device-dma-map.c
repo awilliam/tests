@@ -21,7 +21,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/vfs.h>
-#include <time.h>
 
 #include <linux/ioctl.h>
 #include <linux/vfio.h>
