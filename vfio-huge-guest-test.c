@@ -13,6 +13,7 @@
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#include <stdlib.h>
 
 #define VFIO_API_VERSION	0
 
