@@ -185,14 +185,16 @@ int vfio_device_attach(const char *devname, int *container_out, int *device_out,
 	if (vfio_group_set_container(group, container))
 		return -1;
 
-	device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, devname);
-	if (device < 0) {
-		printf("Failed to get device %s: %d (%s)\n",
-		       devname, container, strerror(errno));
-		return -1;
+	if (device_out) {
+		device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, devname);
+		if (device < 0) {
+			printf("Failed to get device %s: %d (%s)\n",
+			       devname, container, strerror(errno));
+			return -1;
+		}
+		*device_out = device;
 	}
 
-	*device_out = device;
 	*container_out = container;
 	if (group_out)
 		*group_out = group;
