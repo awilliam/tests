@@ -1,7 +1,21 @@
 CFLAGS = -g -Wall
 SHARED_SRCS = utils.c
 HEADERS = utils.h
-TEST_SRCS = vfio-pci-device-dma-map.c vfio-pci-huge-fault-race.c
+TEST_SRCS = \
+	kvm-huge-guest-test.c \
+	leaktest-legacy-kvm.c \
+	vfio-correctness-tests.c \
+	vfio-huge-guest-test.c \
+	vfio-iommu-map-unmap.c \
+	vfio-iommu-stress-test.c \
+	vfio-noiommu-pci-device-open.c \
+	vfio-pci-device-open.c \
+	vfio-pci-device-open-igd.c \
+	vfio-pci-device-open-sparse-mmap.c \
+	vfio-pci-hot-reset.c  \
+	vfio-pci-device-dma-map.c \
+	vfio-pci-huge-fault-race.c \
+
 
 SHARED_OBJS = $(SHARED_SRCS:.c=.o)
 TEST_BINS = $(TEST_SRCS:.c=)
