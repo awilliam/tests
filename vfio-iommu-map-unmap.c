@@ -34,7 +34,6 @@ int main(int argc, char **argv)
 	struct stat st;
 	ssize_t len;
 	unsigned long i, count;
-	void *vaddr;
 	void **maps;
 	struct vfio_group_status group_status = {
 		.argsz = sizeof(group_status)

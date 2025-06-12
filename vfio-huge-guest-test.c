@@ -408,7 +408,7 @@ int main(int argc, char **argv)
 {
 	int ret, container, group, groupid, fd = -1;
 	char path[PATH_MAX], mempath[PATH_MAX] = "";
-	unsigned long i, vaddr;
+	unsigned long vaddr;
 	struct vfio_group_status group_status = {
 		.argsz = sizeof(group_status)
 	};

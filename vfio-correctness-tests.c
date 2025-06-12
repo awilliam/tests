@@ -681,9 +681,8 @@ int hugepage_test(int fd, unsigned long vaddr,
 int main(int argc, char **argv)
 {
 	int ret, container, group, groupid, fd = -1;
-	int sp = false;
 	char path[PATH_MAX], mempath[PATH_MAX] = "";
-	unsigned long i, vaddr;
+	unsigned long vaddr;
 	struct statfs fs;
 	long hugepagesize, pagesize, mapsize;
 
