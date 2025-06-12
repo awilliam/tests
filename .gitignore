@@ -2,5 +2,6 @@
 vfio-pci-device-dma-map
 vfio-pci-huge-fault-race
 vfio-pci-mem-dma-map
+vfio-pci-device-map-alignment
 vfio-tests-*.tar.gz
 .vscode
