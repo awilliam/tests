@@ -19,7 +19,7 @@ extern int verbose;
 
 
 int vfio_device_attach(const char *devname, int *container_out,
-		       int *device_out);
+		       int *device_out, int *group_out);
 
 #define NSEC_PER_SEC 1000000000ul
 #define USEC_PER_SEC 1000000ul

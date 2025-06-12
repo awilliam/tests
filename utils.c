@@ -169,7 +169,8 @@ static int vfio_container_open(void)
 	return fd;
 }
 
-int vfio_device_attach(const char *devname, int *container_out, int *device_out)
+int vfio_device_attach(const char *devname, int *container_out, int *device_out,
+		       int *group_out)
 {
 	int container, group, device;
 
@@ -193,6 +194,8 @@ int vfio_device_attach(const char *devname, int *container_out, int *device_out)
 
 	*device_out = device;
 	*container_out = container;
+	if (group_out)
+		*group_out = group;
 	return 0;
 }
 
