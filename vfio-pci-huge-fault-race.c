@@ -97,7 +97,7 @@ int main(int argc, char **argv)
 
 	devname = argv[1];
 
-	if (vfio_device_attach(devname, &container, &device))
+	if (vfio_device_attach(devname, &container, &device, NULL))
 		return -1;
 
 	ret = ioctl(device, VFIO_DEVICE_GET_INFO, &device_info);
