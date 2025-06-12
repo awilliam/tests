@@ -639,7 +639,7 @@ int main(int argc, char **argv)
 				return -1;
 			}
 
-			if (!region->flags & VFIO_REGION_INFO_FLAG_CAPS) {
+			if (!(region->flags & VFIO_REGION_INFO_FLAG_CAPS)) {
 				printf("Caps disappeared?!\n");
 				return -1;
 			}
