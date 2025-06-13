@@ -42,6 +42,9 @@ $(TEST_BINS): %: %.o $(SHARED_OBJS)
 clean:
 	rm -f $(SHARED_OBJS) $(TEST_SRCS:.c=.o) $(TEST_BINS) $(ARCHIVE_BASE_NAME)*.tar.gz
 
+check:
+	./run-test.sh
+
 archive:
 	tar -czvf $(ARCHIVE_NAME).tar.gz Makefile $(SHARED_SRCS) $(TEST_SRCS) $(HEADERS)
 
