@@ -17,7 +17,7 @@
  */
 extern int verbose;
 
-
+int vfio_group_attach(int groupid, int *container_out, int *group_out);
 int vfio_device_attach(const char *devname, int *container_out,
 		       int *device_out, int *group_out);
 

@@ -165,14 +165,9 @@ static int vfio_container_open(void)
 	return fd;
 }
 
-int vfio_device_attach(const char *devname, int *container_out, int *device_out,
-		       int *group_out)
+int vfio_group_attach(int groupid, int *container_out, int *group_out)
 {
-	int container, group, groupid, device;
-
-	groupid = vfio_device_get_groupid(devname);
-	if (groupid < 0)
-		return -1;
+	int container, group;
 
 	group = vfio_group_open(groupid);
 	if (group < 0)
@@ -185,6 +180,25 @@ int vfio_device_attach(const char *devname, int *container_out, int *device_out,
 	if (vfio_group_set_container(group, container))
 		return -1;
 
+	if (container_out)
+		*container_out = container;
+	if (group_out)
+		*group_out = group;
+	return 0;
+}
+
+int vfio_device_attach(const char *devname, int *container_out, int *device_out,
+		       int *group_out)
+{
+	int container, group, groupid, device;
+
+	groupid = vfio_device_get_groupid(devname);
+	if (groupid < 0)
+		return -1;
+
+	if (vfio_group_attach(groupid, &container, &group) < 0)
+		return -1;
+
 	if (device_out) {
 		device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, devname);
 		if (device < 0) {
@@ -195,7 +209,8 @@ int vfio_device_attach(const char *devname, int *container_out, int *device_out,
 		*device_out = device;
 	}
 
-	*container_out = container;
+	if (container_out)
+		*container_out = container;
 	if (group_out)
 		*group_out = group;
 	return 0;
