@@ -18,10 +18,60 @@
 #include <limits.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 #include <linux/vfio.h>
 
 int verbose;
+
+int vfio_device_iommufd_getfd(const char *devname)
+{
+	int  domain, bus, dev, func;
+	char path[PATH_MAX];
+	char *vfio_path = NULL;
+	DIR *dir = NULL;
+	struct dirent *dent;
+	int ret;
+
+	ret = sscanf(devname, "%04x:%02x:%02x.%d", &domain, &bus, &dev, &func);
+	if (ret != 4) {
+		printf("Invalid PCI device identifier \"%s\"\n", devname);
+		return -1;
+	}
+
+	snprintf(path, sizeof(path),
+		 "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/vfio-dev",
+		 domain, bus, dev, func);
+
+	dir = opendir(path);
+	if (!dir) {
+		printf("couldn't open directory %s", path);
+		return -1;
+	}
+
+	while ((dent = readdir(dir))) {
+		if (!strncmp(dent->d_name, "vfio", 4)) {
+			vfio_path = dent->d_name;
+			break;
+		}
+	}
+	closedir(dir);
+
+	if (!vfio_path) {
+		printf("failed to find vfio-dev/vfioX");
+		return -1;
+	}
+
+	snprintf(path, sizeof(path), "/dev/vfio/devices/%s", vfio_path);
+	ret = open(path, O_RDWR);
+	if (ret < 0) {
+		printf("Failed to open %s, %d (%s)\n",
+		       path, ret, strerror(errno));
+	}
+
+	return ret;
+}
 
 static int vfio_device_get_groupid(const char *devname)
 {

@@ -18,4 +18,4 @@ set -x
 ./vfio-pci-device-open-sparse-mmap $device
 ./vfio-pci-hot-reset $device
 ./vfio-pci-huge-fault-race $device
-
+./iommufd-pci-device-open $device

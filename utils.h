@@ -20,6 +20,7 @@ extern int verbose;
 int vfio_group_attach(int groupid, int *container_out, int *group_out);
 int vfio_device_attach(const char *devname, int *container_out,
 		       int *device_out, int *group_out);
+int vfio_device_iommufd_getfd(const char *devname);
 
 #define NSEC_PER_SEC 1000000000ul
 #define USEC_PER_SEC 1000000ul
