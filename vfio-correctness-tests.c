@@ -25,6 +25,8 @@
 #include <linux/ioctl.h>
 #include <linux/vfio.h>
 
+#include "utils.h"
+
 void usage(char *name)
 {
 	printf("usage: %s <iommu group id> [memory path]\n", name);
@@ -309,7 +311,7 @@ int hugepage_test(int fd, unsigned long vaddr,
 
 int main(int argc, char **argv)
 {
-	int ret, container, group, groupid, fd = -1;
+	int ret, container, groupid, fd = -1;
 	char path[PATH_MAX], mempath[PATH_MAX] = "";
 	unsigned long vaddr;
 	struct statfs fs;
@@ -336,50 +338,15 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	if (vfio_group_attach(groupid, &container, NULL))
+		return -1;
+
 	if (argc > 2) {
 		ret = sscanf(argv[2], "%s", mempath);
 		if (ret != 1) {
 			usage(argv[0]);
 			return -1;
 		}
-	}
-
-	container = open("/dev/vfio/vfio", O_RDWR);
-	if (container < 0) {
-		printf("Failed to open /dev/vfio/vfio, %d (%s)\n",
-		       container, strerror(errno));
-		return container;
-	}
-
-	snprintf(path, sizeof(path), "/dev/vfio/%d", groupid);
-	group = open(path, O_RDWR);
-	if (group < 0) {
-		printf("Failed to open %s, %d (%s)\n",
-		       path, group, strerror(errno));
-		return group;
-	}
-
-	ret = ioctl(group, VFIO_GROUP_GET_STATUS, &group_status);
-	if (ret) {
-		printf("ioctl(VFIO_GROUP_GET_STATUS) failed\n");
-		return ret;
-	}
-
-	if (!(group_status.flags & VFIO_GROUP_FLAGS_VIABLE)) {
-		printf("Group not viable, are all devices attached to vfio?\n");
-		return -1;
-	}
-
-	ret = ioctl(group, VFIO_GROUP_SET_CONTAINER, &container);
-	if (ret) {
-		printf("Failed to set group container\n");
-		return ret;
-	}
-
-	ret = ioctl(container, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU);
-	if (ret) {
-		printf("Failed to set IOMMU\n");
-		return ret;
 	}
 
 	hugepagesize = pagesize = getpagesize();
