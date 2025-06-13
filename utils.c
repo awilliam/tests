@@ -61,16 +61,12 @@ static int vfio_device_get_groupid(const char *devname)
 	return groupid;
 }
 
-static int vfio_group_open(const char *devname)
+static int vfio_group_open(int groupid)
 {
-	int fd, groupid;
+	int fd;
 	char path[PATH_MAX];
 	int ret;
 	struct vfio_group_status status = { .argsz = sizeof(status) };
-
-	groupid = vfio_device_get_groupid(devname);
-	if (groupid < 0)
-		return -1;
 
 	snprintf(path, sizeof(path), "/dev/vfio/%d", groupid);
 	fd = open(path, O_RDWR);
@@ -172,9 +168,13 @@ static int vfio_container_open(void)
 int vfio_device_attach(const char *devname, int *container_out, int *device_out,
 		       int *group_out)
 {
-	int container, group, device;
+	int container, group, groupid, device;
 
-	group = vfio_group_open(devname);
+	groupid = vfio_device_get_groupid(devname);
+	if (groupid < 0)
+		return -1;
+
+	group = vfio_group_open(groupid);
 	if (group < 0)
 		return -1;
 
