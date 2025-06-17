@@ -11,7 +11,7 @@ set -x
 ./vfio-huge-guest-test $groupid
 ./vfio-iommu-map-unmap $device
 ./vfio-iommu-stress-test $device
-./vfio-noiommu-pci-device-open $groupid $device
+./vfio-noiommu-pci-device-open $device
 ./vfio-pci-device-dma-map $device
 ./vfio-pci-device-open $device
 ./vfio-pci-device-open-igd $device
