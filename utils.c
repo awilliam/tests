@@ -8,6 +8,7 @@
  */
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -111,14 +112,15 @@ static int vfio_device_get_groupid(const char *devname)
 	return groupid;
 }
 
-static int vfio_group_open(int groupid)
+static int vfio_group_open(int groupid, bool noiommu)
 {
 	int fd;
 	char path[PATH_MAX];
 	int ret;
 	struct vfio_group_status status = { .argsz = sizeof(status) };
 
-	snprintf(path, sizeof(path), "/dev/vfio/%d", groupid);
+	snprintf(path, sizeof(path), "/dev/vfio/%s%d",
+		 noiommu ? "noiommu-" : "", groupid);
 	fd = open(path, O_RDWR);
 	if (fd < 0) {
 		printf("Failed to open %s, %d (%s)\n",
@@ -141,9 +143,10 @@ static int vfio_group_open(int groupid)
 	return fd;
 }
 
-static int vfio_group_set_container(int group, int container)
+static int vfio_group_set_container(int group, int container, int iommu_type)
 {
 	int ret;
+	bool noiommu = VFIO_NOIOMMU_IOMMU == iommu_type;
 
 	struct vfio_group_status group_status = {
 		.argsz = sizeof(group_status)
@@ -187,13 +190,15 @@ static int vfio_group_set_container(int group, int container)
 		       "" : "Not ");
 	}
 
-	ret = ioctl(container, VFIO_SET_IOMMU, VFIO_NOIOMMU_IOMMU);
+	ret = ioctl(container, VFIO_SET_IOMMU, noiommu ?
+		    VFIO_TYPE1_IOMMU : VFIO_NOIOMMU_IOMMU);
 	if (!ret) {
-		printf("Incorrectly allowed no-iommu usage!\n");
+		printf("Incorrectly allowed %s-iommu usage!\n", noiommu ?
+		       "no" : "type1");
 		return -1;
 	}
 
-	ret = ioctl(container, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU);
+	ret = ioctl(container, VFIO_SET_IOMMU, iommu_type);
 	if (ret) {
 		printf("Failed to set IOMMU: %d (%s)\n", ret, strerror(errno));
 
@@ -215,11 +220,13 @@ static int vfio_container_open(void)
 	return fd;
 }
 
-int vfio_group_attach(int groupid, int *container_out, int *group_out)
+static int __vfio_group_attach(int groupid, int *container_out, int *group_out,
+			       int iommu_type)
 {
 	int container, group;
+	bool noiommu = VFIO_NOIOMMU_IOMMU == iommu_type;
 
-	group = vfio_group_open(groupid);
+	group = vfio_group_open(groupid, noiommu);
 	if (group < 0)
 		return -1;
 
@@ -227,7 +234,7 @@ int vfio_group_attach(int groupid, int *container_out, int *group_out)
 	if (container < 0)
 		return -1;
 
-	if (vfio_group_set_container(group, container))
+	if (vfio_group_set_container(group, container, iommu_type))
 		return -1;
 
 	if (container_out)
@@ -237,8 +244,15 @@ int vfio_group_attach(int groupid, int *container_out, int *group_out)
 	return 0;
 }
 
-int vfio_device_attach(const char *devname, int *container_out, int *device_out,
-		       int *group_out)
+int vfio_group_attach(int groupid, int *container_out, int *group_out)
+{
+	return __vfio_group_attach(groupid, container_out, group_out,
+				   VFIO_TYPE1_IOMMU);
+}
+
+static int __vfio_device_attach(const char *devname, int *container_out,
+				int *device_out, int *group_out,
+				int iommu_type)
 {
 	int container, group, groupid, device;
 
@@ -246,7 +260,7 @@ int vfio_device_attach(const char *devname, int *container_out, int *device_out,
 	if (groupid < 0)
 		return -1;
 
-	if (vfio_group_attach(groupid, &container, &group) < 0)
+	if (__vfio_group_attach(groupid, &container, &group, iommu_type) < 0)
 		return -1;
 
 	if (device_out) {
@@ -266,6 +280,20 @@ int vfio_device_attach(const char *devname, int *container_out, int *device_out,
 	return 0;
 }
 
+int vfio_device_attach(const char *devname, int *container_out, int *device_out,
+		       int *group_out)
+{
+	return __vfio_device_attach(devname, container_out, device_out,
+				    group_out, VFIO_TYPE1_IOMMU);
+}
+
+int vfio_device_attach_iommu_type(const char *devname, int *container_out,
+				  int *device_out, int *group_out,
+				  int iommu_type)
+{
+	return __vfio_device_attach(devname, container_out, device_out,
+				    group_out, iommu_type);
+}
 
 #define ALIGN_UP(x, a)  (((x) + (a) - 1) & ~((a) - 1))
 
