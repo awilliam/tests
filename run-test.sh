@@ -19,3 +19,4 @@ set -x
 ./vfio-pci-hot-reset $device
 ./vfio-pci-huge-fault-race $device
 ./iommufd-pci-device-open $device
+./vfio-pci-device-migration $device

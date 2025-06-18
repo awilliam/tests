@@ -38,4 +38,6 @@ static inline unsigned long now_nsec(void)
 void *mmap_align(void *addr, size_t length, int prot, int flags,
 		 int fd, off_t offset, size_t align);
 
+#define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+
 #endif /* VFIO_TESTSUITE_UTILS_H */

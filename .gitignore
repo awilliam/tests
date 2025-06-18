@@ -12,4 +12,6 @@ vfio-pci-device-open
 vfio-pci-device-open-igd
 vfio-pci-device-open-sparse-mmap
 vfio-pci-hot-reset
+iommufd-pci-device-open
+vfio-pci-device-migration
 .vscode

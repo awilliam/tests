@@ -15,7 +15,8 @@ TEST_SRCS = \
 	vfio-pci-hot-reset.c  \
 	vfio-pci-device-dma-map.c \
 	vfio-pci-huge-fault-race.c \
-	iommufd-pci-device-open.c
+	iommufd-pci-device-open.c \
+	vfio-pci-device-migration.c
 
 SHARED_OBJS = $(SHARED_SRCS:.c=.o)
 TEST_BINS = $(TEST_SRCS:.c=)
