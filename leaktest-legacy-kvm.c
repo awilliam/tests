@@ -63,7 +63,7 @@ void usage(char *name)
 
 int main(int argc, char **argv)
 {
-	int kvmfd, vmfd, ret, i;
+	int kvmfd, vmfd, ret;
 	int slot, func;
 	struct kvm_userspace_memory_region mem = {
 		.slot = 0,

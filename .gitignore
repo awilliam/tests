@@ -1,0 +1,17 @@
+*.o
+vfio-pci-device-dma-map
+vfio-pci-huge-fault-race
+kvm-huge-guest-test
+leaktest-legacy-kvm
+vfio-correctness-tests
+vfio-huge-guest-test
+vfio-iommu-map-unmap
+vfio-iommu-stress-test
+vfio-noiommu-pci-device-open
+vfio-pci-device-open
+vfio-pci-device-open-igd
+vfio-pci-device-open-sparse-mmap
+vfio-pci-hot-reset
+iommufd-pci-device-open
+vfio-pci-device-migration
+.vscode
